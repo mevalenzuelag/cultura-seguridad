@@ -1,0 +1,358 @@
+---
+title: "Trabajo preliminar - Cultura de Seguridad"
+author: "Manuel Valenzuela"
+date: "21-07-2021"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#### Trabajo de validación  ####
+# Resumen de los cambios
+Edad : La variable Edad en la base de la Empresa 4, tenía edad exacta. Se igualaron los tramos a los que se encuentran en la base con las empresas 1 a 3. 
+
+Nivel educativo : La base de las empresas 1 a 3 diferenciaba entre si habían completado o no la educación básica y media, mientras que la empresa 4 sólo contaba sobre si habia alcanzado educación básica o media, se simplicó para igualar. De la misma forma la base de la empresa 4 podía diferenciar entre educación técnica y universitaria, moentras que la otra base junta ambas categorías (se mantuvo la variable con las categorías juntas). La base 4 contaba con la alternativa "Otro", se mantuvo pero quizás habría que clarificar su significado. 
+
+Antigüedad en la empresa : La base de la empresa 4 tenía la variable de antigüedad con más posibles valores, por lo que se igualaron a las categorías de la base con las empresas 1 a 3.
+
+Posición jerárquica : Se generó la posición jerárquica para la base de las empresas 1 a 3. 
+
+#Comentario de otros aspectos:
+Las variables de la base de la empresa 4 no tiene enunciada la pregunta como si lo tiene la otra base. Por lo que si bien es bastante cierto que las variables son las mismas, se podría confirmar con la contraparte (para el caso de la encuesta en si misma). 
+
+
+```{r, include=FALSE}
+library(readxl)
+
+b1a3 <- read_excel("D:/Trabajo - Estudios/FLACSO/Cultura de Seguridad/bd/Base de datos - FLACSO (Empresas 1 a 3).xlsx")
+names(b1a3)
+
+b4 <- read_excel("D:/Trabajo - Estudios/FLACSO/Cultura de Seguridad/bd/Base de datos - FLACSO (Empresa 4).xlsx")
+names(b4)
+
+library(tidyverse)
+b4_f <- b4 %>%
+  mutate(edad = case_when(edad_exacta >= 18 & edad_exacta <= 30 ~ "Entre 18 a 30 años", 
+                          edad_exacta >= 31 & edad_exacta <= 40 ~ "Entre 31 a 40 años", 
+                          edad_exacta >= 41 & edad_exacta <= 50 ~ "Entre 41 a 50 años", 
+                          edad_exacta >= 51 ~ "Más de 51 años")) %>%
+  mutate(nivel_educativo = case_when(nivelEducativo == "Educación Básica" ~ "Educación Básica" , 
+                                     nivelEducativo == "Educación Media" ~ "Educación Media", 
+                                     nivelEducativo == "Técnico" | nivelEducativo == "Universitaria" ~ "Universitaria y/o técnica", 
+                                     nivelEducativo == "Magister" ~ "Postgrado", 
+                                     nivelEducativo == "Otro (especifique)" ~ "Otro (especifique)")) %>%
+  mutate(antiguedad = ifelse(antiguedad_exacta == "1" | antiguedad_exacta == "2", "De 1 a 2 años", 
+                             ifelse(antiguedad_exacta == "3" | antiguedad_exacta == "4" | antiguedad_exacta == "5", "De 2 a 5 años", 
+                                    ifelse(antiguedad_exacta == "6" | antiguedad_exacta == "7" | antiguedad_exacta == "8" | antiguedad_exacta == "9" | antiguedad_exacta == "10", "De 6 a 10 años", 
+                                           ifelse(antiguedad_exacta == "11" | antiguedad_exacta == "12" | antiguedad_exacta == "13" | antiguedad_exacta == "14" | antiguedad_exacta == "15" | antiguedad_exacta == "16" | antiguedad_exacta == "18" | antiguedad_exacta == "19" | antiguedad_exacta == "20", "De 11 a 20 años", 
+                                                  ifelse(antiguedad_exacta == "21" | antiguedad_exacta == "22" | antiguedad_exacta == "24" | antiguedad_exacta == "25" | antiguedad_exacta == "28" | antiguedad_exacta == "29" | antiguedad_exacta == "más de 30", "Más de 20 años", "Menos de 1 año"))))))
+
+
+b1a3_f <- b1a3 %>%
+  rename(nivelEducativo = nivel_educativo) %>%
+  mutate(nivel_educativo = case_when(nivelEducativo == "BÃ¡sica completa" | nivelEducativo== "BÃ¡sica incompleta" | nivelEducativo== "Básica completa" | nivelEducativo== "Básica incompleta" ~ "Educación Básica ", 
+                                     nivelEducativo == "Media completa" | nivelEducativo== "Media incompleta" ~ "Educación Media", 
+                                     nivelEducativo == "Postgrado" ~ "Postgrado", 
+                                     nivelEducativo == "Universitaria y/o técnica" ~ "Universitaria y/o técnica"))  %>%
+  mutate(posicion_jerarquica = ifelse(empresa == "Empresa 1 - Bbosch" & posicion_jerarquica == 1, "Gerentes", 
+                                      ifelse(empresa == "Empresa 1 - Bbosch" & posicion_jerarquica == 2, "Jefaturas", 
+                                             ifelse(empresa == "Empresa 1 - Bbosch" & posicion_jerarquica == 3, "Supervisión", 
+                                                    ifelse(empresa == "Empresa 1 - Bbosch" & posicion_jerarquica == 4, "Técnicos y profesionales", 
+                                                           ifelse(empresa == "Empresa 1 - Bbosch" & posicion_jerarquica == 5, "Operarios", 
+                                                                  ifelse(empresa == "Empresa 2 - Bitumix" & posicion_jerarquica == 1, "Gerentes",
+                                                                         ifelse(empresa == "Empresa 2 - Bitumix" & posicion_jerarquica == 2, "Jefatura", 
+                                                                                ifelse(empresa == "Empresa 2 - Bitumix" & posicion_jerarquica == 3, "Supervisor", 
+                                                                                       ifelse(empresa == "Empresa 2 - Bitumix" & posicion_jerarquica == 4, "Operaciones", 
+                                                                                              ifelse(empresa == "Empresa 2 - Bitumix" & posicion_jerarquica == 5, "Unidad de Soporte/Staff/Administración", 
+                                                                                                     ifelse(empresa == "Empresa 2 - Bitumix" & posicion_jerarquica == 6, "Capataz", 
+                                                                                                            ifelse(empresa == "Empresa 2 - Bitumix" & posicion_jerarquica == 7, "Técnico", 
+                                                                                                                   ifelse(empresa == "Empresa 2 - Bitumix" & posicion_jerarquica == 8, "Profesional", 
+                                                                                                                          ifelse(empresa == "Empresa 2 - Bitumix" & posicion_jerarquica == 9, "Jefe de área",
+                                                                                                                                 ifelse(empresa == "Empresa 2 - Bitumix" & posicion_jerarquica == 10, "Gerente / Subgerente",
+                                                                                                                                        ifelse(empresa == "Empresa 2 - Bitumix" & posicion_jerarquica == 11, "Gerentes",
+                                                                                                                                               ifelse(empresa == "Empresa 2 - Bitumix" & posicion_jerarquica ==12, "Jefaturas", 
+                                                                                                                                                      ifelse(empresa == "Empresa 3 - Nexxo" & posicion_jerarquica == 1, "Gerencia", 
+                                                                                                                                                             ifelse(empresa == "Empresa 3 - Nexxo" & posicion_jerarquica == 2, "Subgerencia",
+                                                                                                                                                                   ifelse(empresa == "Empresa 3 - Nexxo" & posicion_jerarquica == 3, "Administrador de Contrato", 
+                                                                                                                                                                          ifelse(empresa == "Empresa 3 - Nexxo" & posicion_jerarquica == 4, "Jefe de Areas", 
+                                                                                                                                                                                 ifelse(empresa == "Empresa 3 - Nexxo" & posicion_jerarquica == 5, "Ingenieros de Servicios", 
+                                                                                                                                                                                        ifelse(empresa == "Empresa 3 - Nexxo" & posicion_jerarquica == 6, "Administrativos", 
+                                                                                                                                                                                               ifelse(empresa == "Empresa 3 - Nexxo" & posicion_jerarquica == 7, "Asesor de Prevención", 
+                                                                                                                                                                                                      ifelse(empresa == "Empresa 3 - Nexxo" & posicion_jerarquica == 8, "Supervisores", 
+                                                                                                                                                                                                             ifelse(empresa == "Empresa 3 - Nexxo" & posicion_jerarquica == 9, "Capataces", 
+                                                                                                                                                                                                                    ifelse(empresa == "Empresa 3 - Nexxo" & posicion_jerarquica == 10, "Trabajadores", "Error"))))))))))))))))))))))))))))
+
+base_final <- bind_rows(b1a3_f, b4_f)
+base_final$antiguedad <- factor(base_final$antiguedad, levels = c("Menos de 1 año", "De 1 a 2 años", "De 2 a 5 años", "De 6 a 10 años", "De 11 a 20 años", "Más de 20 años"))
+names(base_final)
+
+                                                                  
+```
+
+Veamos la reclasificación de la posición jerárquica
+```{r}
+base_final <- base_final %>%
+  mutate(posjer_cod = case_when(posicion_jerarquica=="Gerentes" | posicion_jerarquica=="Administrador de Contrato" | posicion_jerarquica=="Gerencia" | posicion_jerarquica=="Ingenieros de Servicios" | posicion_jerarquica=="Subgerencia" | posicion_jerarquica=="Gerente"  ~ "Cargo Gerencial", 
+                                posicion_jerarquica=="Jefaturas" | posicion_jerarquica=="Jefatura" | posicion_jerarquica=="Jefe de Areas" ~ "Jefaturas", 
+                                posicion_jerarquica=="Operarios" |  posicion_jerarquica=="Operaciones" | posicion_jerarquica=="Trabajadores" | posicion_jerarquica=="Apoyo" | posicion_jerarquica=="Ayudante Contratista" | posicion_jerarquica=="Ayudante Ingevec" | posicion_jerarquica=="Jornal Contratista" | posicion_jerarquica=="Jornal Ingevec" | posicion_jerarquica=="Maestro Contratista" | posicion_jerarquica=="Maestro Ingevec" | posicion_jerarquica=="Rigger" | posicion_jerarquica=="Capataces"  ~ "Operarios", 
+                               posicion_jerarquica=="Supervisión" | posicion_jerarquica=="Supervisor" | posicion_jerarquica=="Supervisores" | posicion_jerarquica=="Supervisor Contratista" | posicion_jerarquica=="Supervisor Ingevec" ~ "Supervisión", 
+                              posicion_jerarquica=="Profesional" | posicion_jerarquica=="Técnicos y profesionales" | posicion_jerarquica=="Asesor de Prevención" ~ "Técnicos y profesionales", 
+                              posicion_jerarquica=="Unidad de Soporte/Staff/Administración" | posicion_jerarquica=="Administrativos" | posicion_jerarquica=="Guardia Contratista" | posicion_jerarquica=="Guardia Ingevec" ~ "Soporte/Staff/Administración")) 
+
+
+library(writexl)
+writexl::write_xlsx(base_final, "D:/Trabajo - Estudios/FLACSO/Cultura de Seguridad/bd/Base Completa Cultura de Seguridad.xlsx")
+
+
+
+
+```
+
+Revisemos cómo quedó
+```{r}
+base_final %>%
+  tabyl(posjer_cod) %>%
+  flextable() %>%
+  autofit()
+
+```
+
+```{r}
+
+base_final <- base_final %>%
+  mutate(linea_mando = case_when(posjer_cod=="Gerencia y/o Cargos directivos"  ~ "Linea alta de mando", 
+                                 posjer_cod=="Jefaturas" | posjer_cod=="Técnicos y profesionales" | posjer_cod=="Supervisión" | posjer_cod=="Soporte/Staff/Administración" ~ "Mandos medios", 
+                                 posjer_cod=="Operarios" ~ "Linea baja de mando"))
+
+base_final %>%
+  tabyl(linea_mando) %>%
+  flextable() %>%
+  autofit()
+
+```
+
+
+
+#### Veamos algunas cosas de interés ####
+
+# Primero voy a dejar el chequeo de que las variables hayan quedado bien codificadas
+
+
+Antiguedad exacta VS Antiguedad recodificada
+```{r}
+library (janitor)
+library(flextable)
+
+b4_f %>%
+  tabyl(antiguedad_exacta, antiguedad) %>%
+  adorn_totals(where = "both") %>% 
+  adorn_percentages(denominator = "row") %>%
+  adorn_pct_formatting(digits = 2) %>%
+  adorn_ns(position = "front") %>%
+  adorn_title(row_name = "Antigüedad exacta", col_name = "Antigüedad codificada", placement = "combined") %>%
+  flextable() %>%
+  autofit()
+  
+
+```
+
+Nivel educativo corto vs largo - Base empresa 1 a 3
+```{r}
+b1a3_f %>%
+  tabyl(nivelEducativo, nivel_educativo) %>%
+  adorn_totals(where = "both") %>% 
+  adorn_percentages(denominator = "row") %>%
+  adorn_pct_formatting(digits = 2) %>%
+  adorn_ns(position = "front") %>%
+  adorn_title(row_name = "Antigüedad exacta", col_name = "Antigüedad codificada", placement = "combined") %>%
+  flextable() %>%
+  autofit()
+
+
+
+```
+
+
+Nivel educativo corto vs largo - Base empresa 4
+```{r}
+b4_f %>%
+  tabyl(nivelEducativo, nivel_educativo) %>%
+  adorn_totals(where = "both") %>% 
+  adorn_percentages(denominator = "row") %>%
+  adorn_pct_formatting(digits = 2) %>%
+  adorn_ns(position = "front") %>%
+  adorn_title(row_name = "Antigüedad exacta", col_name = "Antigüedad codificada", placement = "combined") %>%
+  flextable() %>%
+  autofit()
+
+
+```
+
+
+Edad exacta vs Tramos etarios
+```{r}
+b4_f %>%
+  tabyl(edad_exacta, edad) %>%
+  adorn_totals(where = "both") %>% 
+  adorn_percentages(denominator = "row") %>%
+  adorn_pct_formatting(digits = 2) %>%
+  adorn_ns(position = "front") %>%
+  adorn_title(row_name = "Antigüedad exacta", col_name = "Antigüedad codificada", placement = "combined") %>%
+  flextable() %>%
+  autofit()
+
+
+```
+
+
+Chequeo posición jerárquica (dejé una indicación para que todo lo que no quedara clasificado en las categorías, figurara como "Error")
+```{r}
+b1a3_f %>%
+  tabyl(posicion_jerarquica) %>%
+  flextable() %>%
+  autofit()
+
+```
+
+
+# Ahora veamos algunos puntos para discutir
+
+Posición jerárquica: ¿podemos generar una clasificación más general para todos? Veamos los gráficos por empresa
+Empresa A
+```{r}
+aux1 <- base_final %>%
+  filter(empresa=="Empresa 1 - Bbosch")
+
+aux1 %>%
+  tabyl(posicion_jerarquica) %>%
+  flextable() %>%
+  autofit()
+
+
+```
+
+Empresa B
+```{r}
+aux2 <- base_final %>%
+  filter(empresa=="Empresa 2 - Bitumix")
+
+aux2 %>%
+  tabyl(posicion_jerarquica) %>%
+  flextable() %>%
+  autofit()
+
+```
+
+Empresa C
+```{r}
+aux3 <- base_final %>%
+  filter(empresa=="Empresa 3 - Nexxo")
+
+aux3 %>%
+  tabyl(posicion_jerarquica) %>%
+  flextable() %>%
+  autofit()
+
+```
+
+Empresa D
+```{r}
+aux4 <- base_final %>%
+  filter(empresa=="Empresa 4 - Ingevec")
+
+aux4 %>%
+  tabyl(posicion_jerarquica) %>%
+  flextable() %>%
+  autofit()
+
+```
+
+Centros de trabajo: ¿Hay algún análisis que nos interesa a nivel de centros de trabajo? Estos son los centros por empresa
+
+Empresa A 
+```{r}
+aux1 %>%
+  tabyl(centro_trabajo) %>%
+  flextable() %>%
+  autofit()
+
+```
+
+Empresa B
+```{r}
+aux2 %>%
+  tabyl(centro_trabajo) %>%
+  flextable() %>%
+  autofit()
+
+```
+
+Empresa C
+```{r}
+aux3 %>%
+  tabyl(centro_trabajo) %>%
+  flextable() %>%
+  autofit()
+
+```
+
+
+Empresa D
+```{r}
+aux4 %>%
+  tabyl(centro_trabajo) %>%
+  flextable() %>%
+  autofit()
+
+```
+
+
+Lista completa posición jerárquica
+
+```{r}
+
+base_final %>%
+  tabyl(posicion_jerarquica) %>%
+  flextable() %>%
+  autofit()
+
+
+```
+
+
+
+Genero la variable contratista / no contratista
+```{r}
+
+
+
+
+```
+
+
+Antiguedad Ordenada
+```{r}
+base_final %>%
+  tabyl(antiguedad) %>%
+  flextable() %>%
+  autofit()
+
+#Hacer relevel para que las categorias queden ordenadas
+
+
+```
+
+
+Edad (relevel)
+```{r}
+
+base_final %>%
+  tabyl(nivel_educativo) %>%
+  flextable() %>%
+  autofit()
+
+```

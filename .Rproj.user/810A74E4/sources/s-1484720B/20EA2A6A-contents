@@ -1,0 +1,68 @@
+
+#bases de gráficos
+p2_aux1 <- df %>% 
+  count(nivel_educativo) %>% 
+  mutate(pct = n/ sum(n), 
+         pctlabel = paste0(round(pct*100, digits = 1), "%"))
+
+p2_aux2 <- df %>% 
+  count(edad) %>% 
+  mutate(pct = n/ sum(n), 
+         pctlabel = paste0(round(pct*100, digits = 1), "%"))
+
+p2_aux3 <- df %>%
+  count(sexo) %>%
+  arrange(desc(sexo)) %>%
+  mutate(prop = round(n*100/sum(n), digits = 1),
+         lab.ypos = cumsum(prop) - 0.5*prop)
+
+p2_aux3$label <- paste0(p2_aux3$sexo, "\n",
+                        round(p2_aux3$prop), "%", 
+                        "(n=", n, ")")
+
+#Grafico
+p2_1 <- ggplot(p2_aux1, aes(x = nivel_educativo, 
+                            y = pct)) + 
+  scale_y_continuous(breaks = seq(0, 100, 20)) +
+  geom_bar(stat = "identity",
+           fill = "cornflowerblue", 
+           color = "black") +
+  geom_text(aes(label = pctlabel), 
+            vjust = -0.25) + 
+  labs(y = "Porcentaje", 
+       x = "Nivel Educativo") + 
+  scale_y_continuous(labels = percent)
+
+p2_2 <- ggplot(p2_aux2, aes(x = edad, 
+                            y = pct)) + 
+  scale_y_continuous(breaks = seq(0, 100, 20)) +
+  geom_bar(stat = "identity",
+           fill = "salmon", 
+           color = "black") +
+  geom_text(aes(label = pctlabel), 
+            vjust = -0.25) + 
+  labs(y = "Porcentaje", 
+       x = "Edad")  +
+  scale_y_continuous(labels = percent) 
+
+p2_3 <- ggplot(p2_aux3, 
+               aes(x = "", 
+                   y = prop, 
+                   fill = sexo)) +
+  geom_bar(width = 1, 
+           stat = "identity", 
+           color = "black") +
+  geom_text(aes(y = lab.ypos, label = label), 
+            color = "black") +
+  coord_polar("y", 
+              start = 0, 
+              direction = -1) +
+  theme_void() +
+  theme(legend.position = "FALSE") +
+  labs(caption = "Sexo")  
+
+p2 <- ggarrange(p2_1, p2_3, p2_2, 
+                ncol = 2, nrow = 2)  
+
+annotate_figure(p2, top = text_grob("", 
+                                    color = "black", face = "bold", size = 15))

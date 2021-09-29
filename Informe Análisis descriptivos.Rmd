@@ -1,0 +1,1636 @@
+---
+title: Informe 1 - Cultura de Seguridad. Análisis descriptivos
+author: FLACSO-Chile. Programa Trabajo, Empleo, Equidad y Salud (TEES)
+date: 30 de septiembre de 2021
+lang: 'es'
+output: 
+  word_document: 
+    toc: yes
+
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(readxl)
+library(scales)
+library(ggpubr) #grid
+library(labelled) #etiquetas 
+library(RColorBrewer) #Paleta de azules
+library(lavaan) #cfa
+library(semPlot) #gráfico cfa
+library(lavaanPlot) #otro gráfico cfa
+library(tidySEM)
+
+theme_update(plot.title = element_text(hjust = 0.5))
+
+```
+
+```{r lectura base, include=F}
+df <- read_excel("Base Cultura de Seguridad 08 de septiembre 2021.xlsx")
+df <- arrange(df, empresa) %>% 
+  mutate(antiguedad_exacta = na_if(antiguedad_exacta, "-")) %>%
+  mutate(empresa = str_extract(empresa, 'Empresa [:digit:]'))
+
+#Cambio edad exacta 
+df$edad_exacta <- as.numeric(df$edad_exacta)
+
+```
+
+```{r preparacion datos cfa, include=FALSE}
+data_cfa <- df
+
+empresa1_cfa <- df %>%
+  filter(empresa=="Empresa 1")
+
+empresa2_cfa <- df %>%
+  filter(empresa=="Empresa 2")
+
+empresa3_cfa <- df %>%
+  filter(empresa=="Empresa 3")
+
+empresa4_cfa<- df %>%
+  filter(empresa=="Empresa 4")
+
+
+```
+
+```{r etiquetado de variables, include=F}
+#Ajusto y ordeno el etiquetado de las variables que ya tengo
+  # Nivel Educativo, Edad y Antiguedad
+df <- df %>% 
+  mutate(nivel_educativo = case_when(nivel_educativo == "Educación Básica" ~ "Básica", 
+                                     nivel_educativo == "Educación Media" ~ "Media", 
+                                     nivel_educativo == "Universitaria y/o técnica" ~ "Superior", 
+                                     nivel_educativo == "Postgrado" ~ "Posgrado"), 
+         edad = sub("Entre", "", edad), 
+         antiguedad = sub("\\s[^ ]+$", "", antiguedad), 
+         Terreno = case_when(Terreno == "No" ~ "No terreno", 
+                             Terreno == "Si" ~ "Terreno"), 
+         contratista = case_when(contratista == "No" ~ "Empresa principal", 
+                                 contratista == "Si" ~ "Empresa contratista")) 
+
+  #Ordeno las etiquetas para que figuren bien en el gráfico
+# Nivel Educativo
+df$nivel_educativo <- factor(df$nivel_educativo, levels = c("Básica", "Media", "Superior", "Posgrado"))
+
+#Antiguedad
+df <- df %>% 
+  mutate(antiguedad = fct_recode(antiguedad, "De 3 a 5" = "De 2 a 5"))
+df$antiguedad <- factor(df$antiguedad, levels = c("Menos de 1", "De 1 a 2", "De 3 a 5", "De 6 a 10", "De 11 a 20", "Más de 20"))
+
+#Posición jerarquica (Que quede algo así como de más a menos)
+df$posjer_cod <- factor(df$posjer_cod, levels = c("Gerencia y/o Cargos directivos", "Técnicos y profesionales", "Soporte/Staff/Administración", "Jefaturas", "Supervisión", "Operarios"))
+
+#Etiquetas items.
+
+df <- df %>% 
+  mutate_at(.vars = vars(starts_with("item")), 
+            funs(case_when(
+              . == 1 ~ 'Casi nunca', 
+              . == 2 ~ 'Algunas veces',
+              . == 3 ~ 'Frecuentemente', 
+              . == 4 ~ 'Casi siempre'
+            )))
+
+
+```
+
+```{r base por empresa, include=FALSE}
+#Base por empresa
+empresa1 <- df %>%
+  filter(empresa=="Empresa 1")
+
+empresa2 <- df %>%
+  filter(empresa=="Empresa 2")
+
+empresa3 <- df %>%
+  filter(empresa=="Empresa 3")
+
+empresa4 <- df %>%
+  filter(empresa=="Empresa 4")
+
+```
+
+```{r funciones de gráficos, include=F}
+#Graficos de distribución de respuestas general según empresa
+
+# Descriptivo general de cada item. 
+pal_blues4 <- brewer.pal(4, "Blues")
+
+gg_stacked_item <- function(.df,
+                            item_select = NULL,
+                            xlab_title = NULL) {
+  p_item_aux1<- .df %>% 
+    group_by(empresa, .df[[item_select]]) %>% 
+    summarize(n = n()) %>% 
+    mutate(pct = n/sum(n),
+         lbl = percent(pct), 
+         var_lbl = paste0(lbl, " (", n, ")")) 
+
+  p_item_aux2 <- .df %>% 
+    count(.df[[item_select]]) %>%
+    mutate(empresa = paste0("Total muestra"),
+         pct = n/sum(n),
+         lbl = percent(pct), 
+         var_lbl = paste0(lbl, " (", n, ")"))
+
+  p_item_aux <- rbind(p_item_aux1, p_item_aux2)
+  colnames(p_item_aux) <- c("empresa", "item_x", "n", "pct", "lbl", "var_lbl")
+
+  p_item <- ggplot(p_item_aux, aes(x = empresa, 
+                   y = pct, 
+                  fill = factor(item_x, levels = c('Casi siempre', 'Frecuentemente', 'Algunas veces', 'Casi nunca')))) + 
+    geom_bar(stat = "identity",
+           position = "fill", 
+           color = "black") +
+    scale_y_continuous(breaks = seq(0, 1, .2), 
+                     label = percent) +
+    geom_text(aes(label = var_lbl), 
+            size = 4,
+            position = position_stack(vjust = 0.5)) + 
+    labs(y = "", 
+         x = xlab_title,
+         caption = "Nota: n de cada categoría entre paréntesis", 
+         fill ="") +
+    scale_fill_manual(values = c("#2171B5","#6BAED6","#BDD7E7", "#EFF3FF"))  +
+    theme_minimal()
+
+  return(p_item)
+}
+
+# Ejemplo: 
+#p <- gg_stacked_item(df, 'item13', "\nCuando ocurre un accidente las jefaturas buscan las causas, \nno a los culpables.")
+#p
+
+gg_stacked_item_corto <- function(.df,
+                            item_select = NULL,
+                            xlab_title = NULL, 
+                            leg_title = NULL) {
+  p_item_aux<- .df %>% 
+    group_by(empresa, .df[[item_select]]) %>% 
+    summarize(n = n()) %>% 
+    mutate(pct = n/sum(n),
+         lbl = percent(pct), 
+         var_lbl = paste0(lbl, " (", n, ")")) 
+  colnames(p_item_aux) <- c("empresa", "item_x", "n", "pct", "lbl", "var_lbl")
+
+  p_item <- ggplot(p_item_aux, aes(x = empresa, 
+                   y = pct, 
+                  fill = factor(item_x))) + 
+    geom_bar(stat = "identity",
+           position = "fill", 
+           color = "black") +
+    scale_y_continuous(breaks = seq(0, 1, .2), 
+                     label = percent) +
+    geom_text(aes(label = var_lbl), 
+            size = 3.5,
+            position = position_stack(vjust = 0.5)) + 
+    labs(y = "", 
+         x = xlab_title,
+         caption = "Nota: n de cada categoría entre paréntesis", 
+         fill =leg_title) +
+    scale_fill_manual(values = c("#2171B5","#6BAED6","#BDD7E7", "#EFF3FF"))  +
+    theme_minimal()
+
+  return(p_item)
+}
+
+#Ejemplo:
+#p <- gg_stacked_item_corto(df, 'nivel_educativo', "","Nivel Educativo")
+#p
+
+gg_stacked_item_niveleduc <- function(.df,
+                            item_select = NULL,
+                            xlab_title = NULL) {
+  p_item_aux1<- .df %>% 
+    group_by(nivel_educativo, .df[[item_select]]) %>% 
+    summarize(n = n()) %>% 
+    mutate(pct = n/sum(n),
+         lbl = percent(pct), 
+         var_lbl = paste0(lbl, " (", n, ")")) 
+
+  p_item_aux2 <- .df %>% 
+    count(.df[[item_select]]) %>%
+    mutate(nivel_educativo = paste0("Total muestra"),
+         pct = n/sum(n),
+         lbl = percent(pct), 
+         var_lbl = paste0(lbl, " (", n, ")"))
+
+  p_item_aux <- rbind(p_item_aux1, p_item_aux2)
+  colnames(p_item_aux) <- c("nivel_educativo", "item_x", "n", "pct", "lbl", "var_lbl")
+
+  p_item <- ggplot(p_item_aux, aes(x = factor(nivel_educativo, levels = c("Básica", "Media", "Superior", "Posgrado", "Total muestra")), 
+                   y = pct, 
+                  fill = factor(item_x, levels = c('Casi siempre', 'Frecuentemente', 'Algunas veces', 'Casi nunca')))) + 
+    geom_bar(stat = "identity",
+           position = "fill", 
+           color = "black") +
+    scale_y_continuous(breaks = seq(0, 1, .2), 
+                     label = percent) +
+    geom_text(aes(label = var_lbl), 
+            size = 4,
+            position = position_stack(vjust = 0.5)) + 
+    labs(y = "", 
+         x = paste0("Nivel Educativo \n", xlab_title),
+         caption = "Nota: n de cada categoría entre paréntesis", 
+         fill ="") +
+    scale_fill_manual(values = c("#2171B5","#6BAED6","#BDD7E7", "#EFF3FF"))  +
+    theme_minimal()
+
+  return(p_item)
+}
+
+#Ejemplo:
+#p <- gg_stacked_item_niveleduc(df, 'item13', "\nCuando ocurre un accidente las jefaturas buscan las causas, \nno a los culpables.")
+#p
+
+gg_stacked_item_sexo <- function(.df,
+                            item_select = NULL,
+                            xlab_title = NULL) {
+  p_item_aux1<- .df %>% 
+    group_by(sexo, .df[[item_select]]) %>% 
+    summarize(n = n()) %>% 
+    mutate(pct = n/sum(n),
+         lbl = percent(pct), 
+         var_lbl = paste0(lbl, " (", n, ")")) 
+
+  p_item_aux2 <- .df %>% 
+    count(.df[[item_select]]) %>%
+    mutate(sexo = paste0("Total muestra"),
+         pct = n/sum(n),
+         lbl = percent(pct), 
+         var_lbl = paste0(lbl, " (", n, ")"))
+
+  p_item_aux <- rbind(p_item_aux1, p_item_aux2)
+  colnames(p_item_aux) <- c("sexo", "item_x", "n", "pct", "lbl", "var_lbl")
+
+  p_item <- ggplot(p_item_aux, aes(x = sexo, 
+                   y = pct, 
+                  fill = factor(item_x, levels = c('Casi siempre', 'Frecuentemente', 'Algunas veces', 'Casi nunca')))) + 
+    geom_bar(stat = "identity",
+           position = "fill", 
+           color = "black") +
+    scale_y_continuous(breaks = seq(0, 1, .2), 
+                     label = percent) +
+    geom_text(aes(label = var_lbl), 
+            size = 4,
+            position = position_stack(vjust = 0.5)) + 
+    labs(y = "", 
+         x = xlab_title,
+         caption = "Nota: n de cada categoría entre paréntesis", 
+         fill ="") +
+    scale_fill_manual(values = c("#2171B5","#6BAED6","#BDD7E7", "#EFF3FF"))  +
+    theme_minimal()
+
+  return(p_item)
+}
+#Ejemplo
+#p <- gg_stacked_item_sexo(df, 'item13', "\nCuando ocurre un accidente las jefaturas buscan las causas, \nno a los culpables.")
+#p
+
+
+gg_stacked_item_edad <- function(.df,
+                            item_select = NULL,
+                            xlab_title = NULL) {
+  p_item_aux1<- .df %>% 
+    group_by(edad, .df[[item_select]]) %>% 
+    summarize(n = n()) %>% 
+    mutate(pct = n/sum(n),
+         lbl = percent(pct), 
+         var_lbl = paste0(lbl, " (", n, ")")) 
+
+  p_item_aux2 <- .df %>% 
+    count(.df[[item_select]]) %>%
+    mutate(edad = paste0("Total muestra"),
+         pct = n/sum(n),
+         lbl = percent(pct), 
+         var_lbl = paste0(lbl, " (", n, ")"))
+
+  p_item_aux <- rbind(p_item_aux1, p_item_aux2)
+  colnames(p_item_aux) <- c("edad", "item_x", "n", "pct", "lbl", "var_lbl")
+
+  p_item <- ggplot(p_item_aux, aes(x = edad, 
+                   y = pct, 
+                  fill = factor(item_x, levels = c('Casi siempre', 'Frecuentemente', 'Algunas veces', 'Casi nunca')))) + 
+    geom_bar(stat = "identity",
+           position = "fill", 
+           color = "black") +
+    scale_y_continuous(breaks = seq(0, 1, .2), 
+                     label = percent) +
+    geom_text(aes(label = var_lbl), 
+            size = 4,
+            position = position_stack(vjust = 0.5)) + 
+    labs(y = "", 
+         x = paste0("Tramo etario \n", xlab_title),
+         caption = "Nota: n de cada categoría entre paréntesis", 
+         fill ="") +
+    scale_fill_manual(values = c("#2171B5","#6BAED6","#BDD7E7", "#EFF3FF"))  +
+    theme_minimal()
+
+  return(p_item)
+}
+
+#Ejemplo
+#p <- gg_stacked_item_edad(df, 'item13', "\nCuando ocurre un accidente las jefaturas buscan las causas, \nno a los culpables.")
+#p
+
+
+gg_stacked_item_posjer <- function(.df,
+                            item_select = NULL,
+                            xlab_title = NULL) {
+  p_item_aux1<- .df %>% 
+    group_by(posjer_cod, .df[[item_select]]) %>% 
+    summarize(n = n()) %>% 
+    mutate(pct = n/sum(n),
+         lbl = percent(pct), 
+         var_lbl = paste0(lbl, " (", n, ")")) 
+
+  p_item_aux2 <- .df %>% 
+    count(.df[[item_select]]) %>%
+    mutate(posjer_cod = paste0("Total muestra"),
+         pct = n/sum(n),
+         lbl = percent(pct), 
+         var_lbl = paste0(lbl, " (", n, ")"))
+
+  p_item_aux <- rbind(p_item_aux1, p_item_aux2)
+  colnames(p_item_aux) <- c("posjer_cod", "item_x", "n", "pct", "lbl", "var_lbl")
+
+  p_item <- ggplot(p_item_aux, aes(x = factor(posjer_cod, levels = c("Gerencia y/o Cargos directivos", "Técnicos y profesionales", "Soporte/Staff/Administración", "Jefaturas", "Supervisión", "Operarios", "Total muestra")), 
+                   y = pct, 
+                  fill = factor(item_x, levels = c('Casi siempre', 'Frecuentemente', 'Algunas veces', 'Casi nunca')))) + 
+    geom_bar(stat = "identity",
+           position = "fill", 
+           color = "black") +
+    scale_y_continuous(breaks = seq(0, 1, .2), 
+                     label = percent) +
+    geom_text(aes(label = var_lbl), 
+            size = 4,
+            position = position_stack(vjust = 0.5)) + 
+    labs(y = "", 
+         x = paste0("\nPosición jerárquica\n", xlab_title),
+         caption = "Nota: n de cada categoría entre paréntesis", 
+         fill ="") +
+    scale_fill_manual(values = c("#2171B5","#6BAED6","#BDD7E7", "#EFF3FF")) +
+    scale_x_discrete(guide = guide_axis(n.dodge = 2))+
+    theme_minimal()
+
+  return(p_item)
+}
+
+#Ejemplo:
+#p <- gg_stacked_item_posjer(df, 'item13', "\nCuando ocurre un accidente las jefaturas buscan las causas, \nno a los culpables.")
+#p
+
+gg_stacked_item_antiguedad <- function(.df,
+                            item_select = NULL,
+                            xlab_title = NULL) {
+  p_item_aux1<- .df %>% 
+    group_by(antiguedad, .df[[item_select]]) %>% 
+    summarize(n = n()) %>% 
+    mutate(pct = n/sum(n),
+         lbl = percent(pct), 
+         var_lbl = paste0(lbl, " (", n, ")")) 
+
+  p_item_aux2 <- .df %>% 
+    count(.df[[item_select]]) %>%
+    mutate(antiguedad = paste0("Total muestra"),
+         pct = n/sum(n),
+         lbl = percent(pct), 
+         var_lbl = paste0(lbl, " (", n, ")"))
+
+  p_item_aux <- rbind(p_item_aux1, p_item_aux2)
+  colnames(p_item_aux) <- c("antiguedad", "item_x", "n", "pct", "lbl", "var_lbl")
+
+  p_item <- ggplot(p_item_aux, aes(x = factor(antiguedad, levels = c("Menos de 1", "De 1 a 2", "De 2 a 5", "De 6 a 10", "De 11 a 20", "Más de 20")), 
+                   y = pct, 
+                  fill = factor(item_x, levels = c('Casi siempre', 'Frecuentemente', 'Algunas veces', 'Casi nunca')))) + 
+    geom_bar(stat = "identity",
+           position = "fill", 
+           color = "black") +
+    scale_y_continuous(breaks = seq(0, 1, .2), 
+                     label = percent) +
+    geom_text(aes(label = var_lbl), 
+            size = 4,
+            position = position_stack(vjust = 0.5)) + 
+    labs(y = "", 
+         x = paste0("\nAntigüedad en la empresa (en añps)\n", xlab_title),
+         caption = "Nota: n de cada categoría entre paréntesis", 
+         fill ="") +
+    scale_fill_manual(values = c("#2171B5","#6BAED6","#BDD7E7", "#EFF3FF"))  +
+    theme_minimal()
+
+  return(p_item)
+}
+
+#Ejemplo
+#p <- gg_stacked_item_antiguedad(df, 'item13', "\nCuando ocurre un accidente las jefaturas buscan las causas, \nno a los culpables.")
+#p
+
+gg_stacked_item_Terreno <- function(.df,
+                            item_select = NULL,
+                            xlab_title = NULL) {
+  p_item_aux1<- .df %>% 
+    group_by(Terreno, .df[[item_select]]) %>% 
+    summarize(n = n()) %>% 
+    mutate(pct = n/sum(n),
+         lbl = percent(pct), 
+         var_lbl = paste0(lbl, " (", n, ")")) 
+
+  p_item_aux2 <- .df %>% 
+    count(.df[[item_select]]) %>%
+    mutate(Terreno = paste0("Total muestra"),
+         pct = n/sum(n),
+         lbl = percent(pct), 
+         var_lbl = paste0(lbl, " (", n, ")"))
+
+  p_item_aux <- rbind(p_item_aux1, p_item_aux2)
+  colnames(p_item_aux) <- c("Terreno", "item_x", "n", "pct", "lbl", "var_lbl")
+
+  p_item <- ggplot(p_item_aux, aes(x = Terreno, 
+                   y = pct, 
+                  fill = factor(item_x, levels = c('Casi siempre', 'Frecuentemente', 'Algunas veces', 'Casi nunca')))) + 
+    geom_bar(stat = "identity",
+           position = "fill", 
+           color = "black") +
+    scale_y_continuous(breaks = seq(0, 1, .2), 
+                     label = percent) +
+    geom_text(aes(label = var_lbl), 
+            size = 4,
+            position = position_stack(vjust = 0.5)) + 
+    labs(y = "", 
+         x = xlab_title,
+         caption = "Nota: n de cada categoría entre paréntesis", 
+         fill ="") +
+    scale_fill_manual(values = c("#2171B5","#6BAED6","#BDD7E7", "#EFF3FF"))  +
+    theme_minimal()
+
+  return(p_item)
+}
+
+#Ejemplo
+#p <- gg_stacked_item_Terreno(df, 'item13', "\nCuando ocurre un accidente las jefaturas buscan las causas, \nno a los culpables.")
+#p
+
+gg_stacked_item_contratista <- function(.df,
+                            item_select = NULL,
+                            xlab_title = NULL) {
+  p_item_aux1<- .df %>% 
+    group_by(contratista, .df[[item_select]]) %>% 
+    summarize(n = n()) %>% 
+    mutate(pct = n/sum(n),
+         lbl = percent(pct), 
+         var_lbl = paste0(lbl, " (", n, ")")) 
+
+  p_item_aux2 <- .df %>% 
+    count(.df[[item_select]]) %>%
+    mutate(contratista = paste0("Total muestra"),
+         pct = n/sum(n),
+         lbl = percent(pct), 
+         var_lbl = paste0(lbl, " (", n, ")"))
+
+  p_item_aux <- rbind(p_item_aux1, p_item_aux2)
+  colnames(p_item_aux) <- c("contratista", "item_x", "n", "pct", "lbl", "var_lbl")
+
+  p_item <- ggplot(p_item_aux, aes(x = contratista, 
+                   y = pct, 
+                  fill = factor(item_x, levels = c('Casi siempre', 'Frecuentemente', 'Algunas veces', 'Casi nunca')))) + 
+    geom_bar(stat = "identity",
+           position = "fill", 
+           color = "black") +
+    scale_y_continuous(breaks = seq(0, 1, .2), 
+                     label = percent) +
+    geom_text(aes(label = var_lbl), 
+            size = 4,
+            position = position_stack(vjust = 0.5)) + 
+    labs(y = "", 
+         x = xlab_title,
+         caption = "Nota: n de cada categoría entre paréntesis", 
+         fill ="") +
+    scale_fill_manual(values = c("#2171B5","#6BAED6","#BDD7E7", "#EFF3FF"))  +
+    theme_minimal()
+
+  return(p_item)
+}
+
+#Ejemplo
+#p <- gg_stacked_item_contratista(empresa4, 'item13', "\nCuando ocurre un accidente las jefaturas buscan las causas, \nno a los culpables.")
+#p
+
+
+```
+
+# Metodología
+Para el análisis preliminar de la base de datos de la Encuesta de Cultura de Seguridad facilitada por la Mutual de Seguridad, el trabajo de datos se compuso de tres etapas fundamentales. En primera medida, se realizó un trabajo de preparación de la base de datos para identificar variables de interés y para asimilar algunas variables que tenian diferentes categorizaciones para las distintas empresas. 
+
+## Manejo de la base de datos
+Para el presente análisis se utilizó una muestra obtenida de las encuestas aplicadas en 4 empresas, de las cuales había seleccionado una muestra aletoria para cada una de las empresas previo a la recepción de la base de parte del equipos investigador. Estas empresas corresponden a los rubros de XX, XX. Así, la muestra total trabajada correspondió a 2000 trabajadores. Luego de recibir la base de datos el equipo investigador evaluó la información y definió algunos ajustes a las variables de edad, antigüedad, nivel educativo y posición jerárquica de manera de homologar las categorías. Asimismo, se generó una variable que identificara si el centro de trabajo correspondía a uno en terreno o a uno administrativo. 
+Por otra parte, se generaron variables auxiliares que identifican a guardias y a trabajadores de empresas contratistas para la empresa 4 para particularizar algunos análisis que se realizaron con estos datos. 
+
+## Análisis psicométrico
+Con el objetivo de validar las dimensiones obtenidas en el estudio de Aguirre (2018), se realizó un análisis factorial confirmatorio (AFC). Este análisis corresponde a un tipo de ecuación estructural que se ocupa de analizar las relaciones entre mediciones observadas y variables o factores latentes (Brown y Moore, 2012). Como señala Brown y Moore (2012) el objetivo de esta técnica es establecer el número y naturaleza de los factores latentes que se deben tomar en cuenta para la variación y covariación de un set de indicadores. 
+
+Para la aplicación de esta técnica se opto por evaluar el comportamiento de los factores latentes identificados en el estudio de Aguirre (2018) para cada una de las empresas de la muestra. En este marco, y en tanto la muestra total no es representativa ni a nivel de población trabajadora ni a nivel de rubros o tamaño de empresa, no se presentarán los resultados factoriales del total de la muestra. 
+
+
+## Análisis descriptivo
+El análisis descriptivo presentado para explorar en los datos de cultura de seguridad en las 4 empresas, presenta, en primer lugar, una revisión de las variables sociodemográficas y de caracterización del trabajo, y aquellos cruces de interés que fueron identificados para cada empresa. Entre estas variables de interés se consideró: sexo, tramo etario, nivel educativo, antiguedad en la empresa, posición jerárquica 
+
+Comentar: 
+1) Descriptores
+2) Qué análisis se hizó por dimensión 
+Para la descripción de las preguntas más relevantes 
+El análisis presentado a continuación se realizó utilizando RStudio y RMarkdown para la generación del informe cuantitativo. 
+
+# Resultados
+La presente sección presenta los resultados de los análisis realizados sobre la base de datos. Para la presentación de estos, la sección se estructura en dos grandes etapas: en la primera, se presentan los resultados del análisis factorial confimatorio realizado para cada una de las empresas; y en la segunda se presentan un descriptivo general de la base de datos que incorpora una presentación de las variables sociodemográficas y de caracterización del trabajador. 
+
+## Análisis factorial confimatorio
+A continuación se presenta los resultados de análisis factoriales confirmatorios realizados para cada empresa. Con objetivo de facilitar la interpretación se presentarán exclusivamente los resultados estandarizados tanto en los factores como en los niveles.  Asimismo, 
+
+### Resultados factorial confirmatorio en Empresa 1
+```{r CFA empresa 1, include=FALSE}
+bd_e1_cfa <- empresa1_cfa %>%
+  select("item13", "item16","item17", "item19", "item20", "item21", "item22", "item23", "item24", "item26", "item31", "item38", "item18", "item27","item36", "item37", "item39", "item42", "item46", "item47", "item55", "item57", "item58", "item59", "item61", "item62", "item63", "item1","item2", "item3", "item4", "item5", "item7", "item8", "item9", "item10", "item11", "item14", "item15", "item28", "item12", "item25", "item33","item43","item45", "item53", "item60", "item29", "item30", "item44", "item49", "item50", "item51", "item52", "item54","item6", "item32", "item34", "item35", "item40", "item41", "item48", "item56")
+
+model <- '
+ASR =~ item13 + item16 + item17 + item19 + item20 + item21 + item22 + item23 + item24 + item26 + item 31 + item38
+RE =~  item18 + item27 + item36 + item37 + item39 + item42 + item46 + item 47 + item55 + item57 + item58 + item59 + item61 + item62 + item63
+IC =~  item1 + item2 + item3 + item4 + item5 + item7 + item8 + item9 + item10 + item11 + item14 + item15 + item28
+VC =~  item12 + item25 + item33 + item43 + item45 + item53 + item60
+R =~   item29+ item30+ item44+ item49+ item50+ item51+ item52+ item54
+S =~   item6 + item32 + item34 + item35 + item40 + item41 + item48 + item56'
+
+# Factor 1 = Adherencia a la seguridad reglada
+# Factor 2 = Retorno de la experiencia
+# Factor 3 = Información y conocimiento
+# Factor 4 = Vigilancia compartida
+# Factor 5 = Reconocimiento
+# Factor 6 = Sanción
+
+fit1 <- cfa(model, data=bd_e1_cfa, ordered=c("item13", "item16","item17", "item19", "item20", "item21", "item22", "item23", "item24", "item26", "item31","item38", "item18", "item27", "item36", "item37", "item39", "item42", "item46", "item47", "item55", "item57","item58", "item59", "item61", "item62", "item63", "item1", "item2", "item3", "item4", "item5", "item7","item8", "item9", "item10", "item11", "item14", "item15", "item28", "item12", "item25", "item33", "item43","item45", "item53", "item60", "item29", "item30", "item44", "item49", "item50", "item51", "item52", "item54","item6", "item32", "item34", "item35", "item40", "item41", "item48", "item56"), std.lv=T)
+
+summary(fit1, fit.measures=T, standardized = T)
+```
+El diagrama 1, a continuación, presenta un resumen del modelo de análisis factorial aplicado en la Empresa 1. En este se observan los factores latentes y los niveles observados y las cargas y covarianzas, standarizadas. No se presentan los interceptos, en tanto están fijados en 1.
+
+**Diagrama 1. Resumen del resultado de análisis factorial Empresa 1**
+```{r plot e1, echo=FALSE, fig.height=15, fig.width=15}
+semPaths(fit1, "std", layout = "circle2", sizeMan=2, sizeLat = 3, sizeInt = 2, intercepts = FALSE, optimizeLatRes = TRUE, optimPoints = TRUE, edge.label.cex = 0.5, edge.label.position = 0.75)
+
+```
+Como se presenta, 
+
+*Ajuste del modelo*
+
+**Tabla 1. Medidas de ajuste del modelo Empresa 1**
+```{r model fit1, echo=FALSE, fig.height=1.3, fig.width=3.4}
+standard <- fitmeasures(fit1, c('cfi', 'tli', 'rmsea'))
+robust <- fitmeasures(fit1, c('cfi.scaled', 'tli.scaled', 'rmsea.scaled'))
+
+modelfit1 <- tibble('Medida de ajuste' = c("CFI", "TLI", "RMSEA"), Estándar = standard, Robusto = robust)
+
+modelfit1<- ggtexttable(modelfit1, rows = NULL, theme = ttheme("mBlueWhite"))
+modelfit1
+
+```
+
+
+*Cargas factoriales de los items*
+
+**Tabla 2. Cargas factoriales de Adherencia a la seguridad reglada (ASR)**
+```{r table loadings asr e1, echo=FALSE, fig.height=3.8, fig.width=6}
+df_parameters_e1 <- parameterEstimates(fit1, ci=F, standardized = T)
+loadings_e1 <- subset(df_parameters_e1, op == "=~")
+
+loadings_table_e1_asr <-  loadings_e1 %>% 
+  select(-c(op, std.lv, std.nox)) %>% 
+  filter(lhs=="ASR")
+colnames(loadings_table_e1_asr) <- c('Dimensión', 'item', 'Estimación', 'Error std', 'Z', 'Valor-p', 'Cargas std')
+
+loadings_table_e1_asr <- ggtexttable(loadings_table_e1_asr, rows = NULL, theme = ttheme("mBlueWhite"))
+loadings_table_e1_asr
+
+```
+
+
+**Tabla 3. Cargas Factoriales de Retorno de la experiencia (RE)**
+```{r table loadings RE e1, echo=FALSE, fig.height=4.65, fig.width=6}
+loadings_table_e1_re <-  loadings_e1 %>% 
+  select(-c(op, std.lv, std.nox)) %>% 
+  filter(lhs=="RE")
+colnames(loadings_table_e1_re) <- c('Dimensión', 'item', 'Estimación', 'Error std', 'Z', 'Valor-p', 'Cargas std')
+
+loadings_table_e1_re <- ggtexttable(loadings_table_e1_re, rows = NULL, theme = ttheme("mBlueWhite"))
+loadings_table_e1_re
+```
+
+
+**Tabla 4. Cargas Factoriales de Información y conocimiento (IC)**
+```{r table loadings IC e1, echo=FALSE, fig.height=4.05, fig.width=6}
+loadings_table_e1_ic <-  loadings_e1 %>% 
+  select(-c(op, std.lv, std.nox)) %>% 
+  filter(lhs=="IC")
+colnames(loadings_table_e1_ic) <- c('Dimensión', 'item', 'Estimación', 'Error std', 'Z', 'Valor-p', 'Cargas std')
+
+loadings_table_e1_ic <- ggtexttable(loadings_table_e1_ic, rows = NULL, theme = ttheme("mBlueWhite"))
+loadings_table_e1_ic
+
+```
+
+**Tabla 5. Cargas Factoriales de Vigilancia compartida (VC)**
+```{r table loadings VC e1, echo=FALSE, fig.height=2.37, fig.width=6}
+loadings_table_e1_vc <-  loadings_e1 %>% 
+  select(-c(op, std.lv, std.nox)) %>% 
+  filter(lhs=="VC")
+colnames(loadings_table_e1_vc) <- c('Dimensión', 'item', 'Estimación', 'Error std', 'Z', 'Valor-p', 'Cargas std')
+
+loadings_table_e1_vc <- ggtexttable(loadings_table_e1_vc, rows = NULL, theme = ttheme("mBlueWhite"))
+loadings_table_e1_vc
+
+```
+
+
+**Tabla 6. Cargas Factoriales de Reconocimiento (R)**
+```{r  table loadings R e1, echo=FALSE, fig.height=2.67, fig.width=6}
+loadings_table_e1_r <-  loadings_e1 %>% 
+  select(-c(op, std.lv, std.nox)) %>% 
+  filter(lhs=="R")
+colnames(loadings_table_e1_r) <- c('Dimensión', 'item', 'Estimación', 'Error std', 'Z', 'Valor-p', 'Cargas std')
+
+loadings_table_e1_r <- ggtexttable(loadings_table_e1_r, rows = NULL, theme = ttheme("mBlueWhite"))
+loadings_table_e1_r
+
+```
+
+**Tabla 7. Cargas Factoriales de Sanción (S)**
+```{r table loadings S e1, echo=FALSE, fig.height=2.7, fig.width=6}
+loadings_table_e1_s <-  loadings_e1 %>% 
+  select(-c(op, std.lv, std.nox)) %>% 
+  filter(lhs=="S")
+colnames(loadings_table_e1_s) <- c('Dimensión', 'item', 'Estimación', 'Error std', 'Z', 'Valor-p', 'Cargas std')
+
+loadings_table_e1_s <- ggtexttable(loadings_table_e1_s, rows = NULL, theme = ttheme("mBlueWhite"))
+loadings_table_e1_s
+
+```
+
+
+
+### Resultados factorial confirmatorio en Empresa 2
+```{r cfa empresa 2, include=FALSE}
+bd_e2_cfa <- empresa2_cfa %>%
+  select("item13", "item16","item17", "item19", "item20", "item21", "item22", "item23", "item24", "item26", "item31", "item38", "item18", "item27","item36", "item37", "item39", "item42", "item46", "item47", "item55", "item57", "item58", "item59", "item61", "item62", "item63", "item1","item2", "item3", "item4", "item5", "item7", "item8", "item9", "item10", "item11", "item14", "item15", "item28", "item12", "item25", "item33","item43","item45", "item53", "item60", "item29", "item30", "item44", "item49", "item50", "item51", "item52", "item54","item6", "item32", "item34", "item35", "item40", "item41", "item48", "item56")
+
+model <- '
+ASR =~ item13 + item16 + item17 + item19 + item20 + item21 + item22 + item23 + item24 + item26 + item 31 + item38
+RE =~ item18 + item27 + item36 + item37 + item39 + item42 + item46 + item 47 + item55 + item57 + item58 + item59 + item61 + item62 + item63
+IC =~ item1 + item2 + item3 + item4 + item5 + item7 + item8 + item9 + item10 + item11 + item14 + item15 + item28
+VC =~ item12 + item25 + item33 + item43 + item45 + item53 + item60
+R =~  item29+ item30+ item44+ item49+ item50+ item51+ item52+ item54
+S =~  item6 + item32 + item34 + item35 + item40 + item41 + item48 + item56'
+
+# Factor 1 = Adherencia a la seguridad reglada
+# Factor 2 = Retorno de la experiencia
+# Factor 3 = Información y conocimiento
+# Factor 4 = Vigilancia compartida
+# Factor 5 = Reconocimiento
+# Factor 6 = Sanción
+
+fit2 <- cfa(model, data=bd_e2_cfa, ordered=c("item13", "item16","item17", "item19", "item20", "item21", "item22", "item23", "item24", "item26", "item31","item38", "item18", "item27", "item36", "item37", "item39", "item42", "item46", "item47", "item55", "item57","item58", "item59", "item61", "item62", "item63", "item1", "item2", "item3", "item4", "item5", "item7","item8", "item9", "item10", "item11", "item14", "item15", "item28", "item12", "item25", "item33", "item43","item45", "item53", "item60", "item29", "item30", "item44", "item49", "item50", "item51", "item52", "item54","item6", "item32", "item34", "item35", "item40", "item41", "item48", "item56"), std.lv=T)
+
+summary(fit2, standardized=T, fit.measures=T)
+
+
+```
+En el Diagrama 2 se presenta el resumen del resultado factorial utilizado sobre la empresa 2. 
+
+**Diagrama 2. Resumen del resultado de análisis factorial Empresa 2**
+```{r plot e2, echo=FALSE, fig.height=15, fig.width=15}
+semPaths(fit2, "std", layout = "circle2", sizeMan=2, sizeLat = 3, sizeInt = 2, intercepts = FALSE, optimizeLatRes = TRUE, optimPoints = TRUE, edge.label.cex = 0.5, edge.label.position = 0.75)
+
+```
+
+*Ajuste del modelo*
+
+
+**Tabla 8. Medidas de ajuste del modelo**
+```{r modelfit2, echo=FALSE, fig.height=1.3, fig.width=3.4}
+standard <- fitmeasures(fit2, c('cfi', 'tli', 'rmsea'))
+robust <- fitmeasures(fit2, c('cfi.scaled', 'tli.scaled', 'rmsea.scaled'))
+
+modelfit2 <- tibble('Medida de ajuste' = c("CFI", "TLI", "RMSEA"), Estándar = standard, Robusto = robust)
+
+modelfit2<- ggtexttable(modelfit2, rows = NULL, theme = ttheme("mBlueWhite"))
+modelfit2
+```
+
+
+*Cargas factoriales de los items*
+
+**Tabla 9. Cargas factoriales de Adherencia a la seguridad reglada (ASR)**
+```{r table loadings asr e2, echo=FALSE, fig.height=3.8, fig.width=6}
+df_parameters_e2 <- parameterEstimates(fit2, ci=F, standardized = T)
+loadings_e2 <- subset(df_parameters_e2, op == "=~")
+
+loadings_table_e2_asr <-  loadings_e2 %>% 
+  select(-c(op, std.lv, std.nox)) %>% 
+  filter(lhs=="ASR")
+colnames(loadings_table_e2_asr) <- c('Dimensión', 'item', 'Estimación', 'Error std', 'Z', 'Valor-p', 'Cargas std')
+
+loadings_table_e2_asr <- ggtexttable(loadings_table_e2_asr, rows = NULL, theme = ttheme("mBlueWhite"))
+loadings_table_e2_asr
+
+```
+
+
+**Tabla 10. Cargas Factoriales de Retorno de la experiencia (RE)**
+```{r table loadings RE e2, echo=FALSE, fig.height=4.65, fig.width=6}
+loadings_table_e2_re <-  loadings_e2 %>% 
+  select(-c(op, std.lv, std.nox)) %>% 
+  filter(lhs=="RE")
+colnames(loadings_table_e2_re) <- c('Dimensión', 'item', 'Estimación', 'Error std', 'Z', 'Valor-p', 'Cargas std')
+
+loadings_table_e2_re <- ggtexttable(loadings_table_e2_re, rows = NULL, theme = ttheme("mBlueWhite"))
+loadings_table_e2_re
+```
+
+
+**Tabla 11. Cargas Factoriales de Información y conocimiento (IC)**
+```{r table loadings IC e2, echo=FALSE, fig.height=4.05, fig.width=6}
+loadings_table_e2_ic <-  loadings_e2 %>% 
+  select(-c(op, std.lv, std.nox)) %>% 
+  filter(lhs=="IC")
+colnames(loadings_table_e2_ic) <- c('Dimensión', 'item', 'Estimación', 'Error std', 'Z', 'Valor-p', 'Cargas std')
+
+loadings_table_e2_ic <- ggtexttable(loadings_table_e2_ic, rows = NULL, theme = ttheme("mBlueWhite"))
+loadings_table_e2_ic
+
+```
+
+**Tabla 12. Cargas Factoriales de Vigilancia compartida (VC)**
+```{r table loadings VC e2, echo=FALSE, fig.height=2.37, fig.width=6}
+loadings_table_e2_vc <-  loadings_e2 %>% 
+  select(-c(op, std.lv, std.nox)) %>% 
+  filter(lhs=="VC")
+colnames(loadings_table_e2_vc) <- c('Dimensión', 'item', 'Estimación', 'Error std', 'Z', 'Valor-p', 'Cargas std')
+
+loadings_table_e2_vc <- ggtexttable(loadings_table_e2_vc, rows = NULL, theme = ttheme("mBlueWhite"))
+loadings_table_e2_vc
+
+```
+
+
+**Tabla 13. Cargas Factoriales de Reconocimiento (R)**
+```{r  table loadings R e2, echo=FALSE, fig.height=2.67, fig.width=6}
+loadings_table_e2_r <-  loadings_e2 %>% 
+  select(-c(op, std.lv, std.nox)) %>% 
+  filter(lhs=="R")
+colnames(loadings_table_e2_r) <- c('Dimensión', 'item', 'Estimación', 'Error std', 'Z', 'Valor-p', 'Cargas std')
+
+loadings_table_e2_r <- ggtexttable(loadings_table_e2_r, rows = NULL, theme = ttheme("mBlueWhite"))
+loadings_table_e2_r
+
+```
+
+**Tabla 14. Cargas Factoriales de Sanción (S)**
+```{r table loadings S e2, echo=FALSE, fig.height=2.7, fig.width=6}
+loadings_table_e2_s <-  loadings_e2 %>% 
+  select(-c(op, std.lv, std.nox)) %>% 
+  filter(lhs=="S")
+colnames(loadings_table_e2_s) <- c('Dimensión', 'item', 'Estimación', 'Error std', 'Z', 'Valor-p', 'Cargas std')
+
+loadings_table_e2_s <- ggtexttable(loadings_table_e2_s, rows = NULL, theme = ttheme("mBlueWhite"))
+loadings_table_e2_s
+
+```
+
+
+
+### Resultados factorial confirmatorio en Empresa 3
+```{r cfa empresa 3, include=FALSE}
+bd_e3_cfa <- empresa3_cfa %>%
+  select("item13", "item16","item17", "item19", "item20", "item21", "item22", "item23", "item24", "item26", "item31", "item38", "item18", "item27","item36", "item37", "item39", "item42", "item46", "item47", "item55", "item57", "item58", "item59", "item61", "item62", "item63", "item1","item2", "item3", "item4", "item5", "item7", "item8", "item9", "item10", "item11", "item14", "item15", "item28", "item12", "item25", "item33","item43","item45", "item53", "item60", "item29", "item30", "item44", "item49", "item50", "item51", "item52", "item54","item6", "item32", "item34", "item35", "item40", "item41", "item48", "item56")
+
+model <- '
+ASR =~ item13 + item16 + item17 + item19 + item20 + item21 + item22 + item23 + item24 + item26 + item 31 + item38
+RE =~ item18 + item27 + item36 + item37 + item39 + item42 + item46 + item 47 + item55 + item57 + item58 + item59 + item61 + item62 + item63
+IC =~ item1 + item2 + item3 + item4 + item5 + item7 + item8 + item9 + item10 + item11 + item14 + item15 + item28
+VC =~ item12 + item25 + item33 + item43 + item45 + item53 + item60
+R =~  item29+ item30+ item44+ item49+ item50+ item51+ item52+ item54
+S =~  item6 + item32 + item34 + item35 + item40 + item41 + item48 + item56'
+
+# Factor 1 = Adherencia a la seguridad reglada
+# Factor 2 = Retorno de la experiencia
+# Factor 3 = Información y conocimiento
+# Factor 4 = Vigilancia compartida
+# Factor 5 = Reconocimiento
+# Factor 6 = Sanción
+
+fit3 <- cfa(model, data=bd_e3_cfa, ordered=c("item13", "item16","item17", "item19", "item20", "item21", "item22", "item23", "item24", "item26", "item31","item38", "item18", "item27", "item36", "item37", "item39", "item42", "item46", "item47", "item55", "item57","item58", "item59", "item61", "item62", "item63", "item1", "item2", "item3", "item4", "item5", "item7","item8", "item9", "item10", "item11", "item14", "item15", "item28", "item12", "item25", "item33", "item43","item45", "item53", "item60", "item29", "item30", "item44", "item49", "item50", "item51", "item52", "item54","item6", "item32", "item34", "item35", "item40", "item41", "item48", "item56"))
+
+summary(fit3, fit.measures=T, standardized = T)
+
+```
+
+**Diagrama 3. Resumen del resultado de análisis factorial Empresa 3**
+```{r plot e3, echo=FALSE, fig.height=15, fig.width=15}
+semPaths(fit3, "std", layout = "circle2", sizeMan=2, sizeLat = 3, sizeInt = 2, intercepts = FALSE, optimizeLatRes = TRUE, optimPoints = TRUE, edge.label.cex = 0.5, edge.label.position = 0.75)
+
+```
+
+*Ajuste del modelo*
+
+**Tabla 15. Medidas de ajuste del modelo**
+```{r modelfit3, echo=FALSE, fig.height=1.3, fig.width=3.4}
+standard <- fitmeasures(fit3, c('cfi', 'tli', 'rmsea'))
+robust <- fitmeasures(fit3, c('cfi.scaled', 'tli.scaled', 'rmsea.scaled'))
+
+modelfit3 <- tibble('Medida de ajuste' = c("CFI", "TLI", "RMSEA"), Estándar = standard, Robusto = robust)
+
+modelfit3<- ggtexttable(modelfit3, rows = NULL, theme = ttheme("mBlueWhite"))
+modelfit3
+
+```
+
+
+*Cargas factoriales de los items*
+
+**Tabla 16. Cargas factoriales de Adherencia a la seguridad reglada (ASR)**
+```{r table loadings asr e3, echo=FALSE, fig.height=3.8, fig.width=6}
+df_parameters_e3 <- parameterEstimates(fit3, ci=F, standardized = T)
+loadings_e3 <- subset(df_parameters_e3, op == "=~")
+
+loadings_table_e3_asr <-  loadings_e3 %>% 
+  select(-c(op, std.lv, std.nox)) %>% 
+  filter(lhs=="ASR")
+colnames(loadings_table_e3_asr) <- c('Dimensión', 'item', 'Estimación', 'Error std', 'Z', 'Valor-p', 'Cargas std')
+
+loadings_table_e3_asr <- ggtexttable(loadings_table_e3_asr, rows = NULL, theme = ttheme("mBlueWhite"))
+loadings_table_e3_asr
+
+```
+
+
+**Tabla 17. Cargas Factoriales de Retorno de la experiencia (RE)**
+```{r table loadings RE e3, echo=FALSE, fig.height=4.65, fig.width=6}
+loadings_table_e3_re <-  loadings_e3 %>% 
+  select(-c(op, std.lv, std.nox)) %>% 
+  filter(lhs=="RE")
+colnames(loadings_table_e3_re) <- c('Dimensión', 'item', 'Estimación', 'Error std', 'Z', 'Valor-p', 'Cargas std')
+
+loadings_table_e3_re <- ggtexttable(loadings_table_e3_re, rows = NULL, theme = ttheme("mBlueWhite"))
+loadings_table_e3_re
+```
+
+
+**Tabla 18. Cargas Factoriales de Información y conocimiento (IC)**
+```{r table loadings IC e3, echo=FALSE, fig.height=4.05, fig.width=6}
+loadings_table_e3_ic <-  loadings_e3 %>% 
+  select(-c(op, std.lv, std.nox)) %>% 
+  filter(lhs=="IC")
+colnames(loadings_table_e3_ic) <- c('Dimensión', 'item', 'Estimación', 'Error std', 'Z', 'Valor-p', 'Cargas std')
+
+loadings_table_e3_ic <- ggtexttable(loadings_table_e3_ic, rows = NULL, theme = ttheme("mBlueWhite"))
+loadings_table_e3_ic
+
+```
+
+**Tabla 19. Cargas Factoriales de Vigilancia compartida (VC)**
+```{r table loadings VC e3, echo=FALSE, fig.height=2.37, fig.width=6}
+loadings_table_e3_vc <-  loadings_e3 %>% 
+  select(-c(op, std.lv, std.nox)) %>% 
+  filter(lhs=="VC")
+colnames(loadings_table_e3_vc) <- c('Dimensión', 'item', 'Estimación', 'Error std', 'Z', 'Valor-p', 'Cargas std')
+
+loadings_table_e3_vc <- ggtexttable(loadings_table_e3_vc, rows = NULL, theme = ttheme("mBlueWhite"))
+loadings_table_e3_vc
+
+```
+
+
+**Tabla 20. Cargas Factoriales de Reconocimiento (R)**
+```{r  table loadings R e3, echo=FALSE, fig.height=2.67, fig.width=6}
+loadings_table_e3_r <-  loadings_e3 %>% 
+  select(-c(op, std.lv, std.nox)) %>% 
+  filter(lhs=="R")
+colnames(loadings_table_e3_r) <- c('Dimensión', 'item', 'Estimación', 'Error std', 'Z', 'Valor-p', 'Cargas std')
+
+loadings_table_e3_r <- ggtexttable(loadings_table_e3_r, rows = NULL, theme = ttheme("mBlueWhite"))
+loadings_table_e3_r
+
+```
+
+**Tabla 21. Cargas Factoriales de Sanción (S)**
+```{r table loadings S e3, echo=FALSE, fig.height=2.7, fig.width=6}
+loadings_table_e3_s <-  loadings_e3 %>% 
+  select(-c(op, std.lv, std.nox)) %>% 
+  filter(lhs=="S")
+colnames(loadings_table_e3_s) <- c('Dimensión', 'item', 'Estimación', 'Error std', 'Z', 'Valor-p', 'Cargas std')
+
+loadings_table_e3_s <- ggtexttable(loadings_table_e3_s, rows = NULL, theme = ttheme("mBlueWhite"))
+loadings_table_e3_s
+
+```
+
+
+### Resultados factorial confirmatorio en Empresa 4
+```{r cfa empresa 4, include=FALSE}
+bd_e4_cfa <- empresa4_cfa %>%
+  select("item13", "item16","item17", "item19", "item20", "item21", "item22", "item23", "item24", "item26", "item31", "item38", "item18", "item27","item36", "item37", "item39", "item42", "item46", "item47", "item55", "item57", "item58", "item59", "item61", "item62", "item63", "item1","item2", "item3", "item4", "item5", "item7", "item8", "item9", "item10", "item11", "item14", "item15", "item28", "item12", "item25", "item33","item43","item45", "item53", "item60", "item29", "item30", "item44", "item49", "item50", "item51", "item52", "item54","item6", "item32", "item34", "item35", "item40", "item41", "item48", "item56")
+
+model <- '
+ASR =~ item13 + item16 + item17 + item19 + item20 + item21 + item22 + item23 + item24 + item26 + item 31 + item38
+RE =~ item18 + item27 + item36 + item37 + item39 + item42 + item46 + item 47 + item55 + item57 + item58 + item59 + item61 + item62 + item63
+IC =~ item1 + item2 + item3 + item4 + item5 + item7 + item8 + item9 + item10 + item11 + item14 + item15 + item28
+VC =~ item12 + item25 + item33 + item43 + item45 + item53 + item60
+R =~  item29+ item30+ item44+ item49+ item50+ item51+ item52+ item54
+S =~  item6 + item32 + item34 + item35 + item40 + item41 + item48 + item56'
+
+# Factor 1 = Adherencia a la seguridad reglada
+# Factor 2 = Retorno de la experiencia
+# Factor 3 = Información y conocimiento
+# Factor 4 = Vigilancia compartida
+# Factor 5 = Reconocimiento
+# Factor 6 = Sanción
+
+fit4 <- cfa(model, data=bd_e4_cfa, ordered=c("item13", "item16","item17", "item19", "item20", "item21", "item22", "item23", "item24", "item26", "item31","item38", "item18", "item27", "item36", "item37", "item39", "item42", "item46", "item47", "item55", "item57","item58", "item59", "item61", "item62", "item63", "item1", "item2", "item3", "item4", "item5", "item7","item8", "item9", "item10", "item11", "item14", "item15", "item28", "item12", "item25", "item33", "item43","item45", "item53", "item60", "item29", "item30", "item44", "item49", "item50", "item51", "item52", "item54","item6", "item32", "item34", "item35", "item40", "item41", "item48", "item56"))
+
+summary(fit4, fit.measures=T, standardized = T)
+
+```
+
+**Diagrama 4. Resumen del resultado de análisis factorial Empresa 4**
+```{r plot e4, echo=FALSE, fig.height=15, fig.width=15}
+semPaths(fit4, "std", layout = "circle2", sizeMan=2, sizeLat = 3, sizeInt = 2, intercepts = FALSE, optimizeLatRes = TRUE, optimPoints = TRUE, edge.label.cex = 0.5, edge.label.position = 0.75)
+
+```
+
+*Ajuste del modelo*
+
+**Tabla 22. Medidas de ajuste del modelo**
+```{r modelfit4, echo=FALSE, fig.height=1.3, fig.width=3.4}
+standard <- fitmeasures(fit4, c('cfi', 'tli', 'rmsea'))
+robust <- fitmeasures(fit4, c('cfi.scaled', 'tli.scaled', 'rmsea.scaled'))
+
+modelfit4 <- tibble('Medida de ajuste' = c("CFI", "TLI", "RMSEA"), Estándar = standard, Robusto = robust)
+
+modelfit4<- ggtexttable(modelfit4, rows = NULL, theme = ttheme("mBlueWhite"))
+modelfit4
+
+```
+
+
+*Cargas factoriales de los items*
+
+**Tabla 23. Cargas factoriales de Adherencia a la seguridad reglada (ASR)**
+```{r table loadings asr e4, echo=FALSE, fig.height=3.8, fig.width=6}
+df_parameters_e4 <- parameterEstimates(fit4, ci=F, standardized = T)
+loadings_e4 <- subset(df_parameters_e4, op == "=~")
+
+loadings_table_e4_asr <-  loadings_e4 %>% 
+  select(-c(op, std.lv, std.nox)) %>% 
+  filter(lhs=="ASR")
+colnames(loadings_table_e4_asr) <- c('Dimensión', 'item', 'Estimación', 'Error std', 'Z', 'Valor-p', 'Cargas std')
+
+loadings_table_e4_asr <- ggtexttable(loadings_table_e4_asr, rows = NULL, theme = ttheme("mBlueWhite"))
+loadings_table_e4_asr
+
+```
+
+
+**Tabla 24. Cargas Factoriales de Retorno de la experiencia (RE)**
+```{r table loadings RE e4, echo=FALSE, fig.height=4.65, fig.width=6}
+loadings_table_e4_re <-  loadings_e4 %>% 
+  select(-c(op, std.lv, std.nox)) %>% 
+  filter(lhs=="RE")
+colnames(loadings_table_e4_re) <- c('Dimensión', 'item', 'Estimación', 'Error std', 'Z', 'Valor-p', 'Cargas std')
+
+loadings_table_e4_re <- ggtexttable(loadings_table_e4_re, rows = NULL, theme = ttheme("mBlueWhite"))
+loadings_table_e4_re
+```
+
+
+**Tabla 25. Cargas Factoriales de Información y conocimiento (IC)**
+```{r table loadings IC e4, echo=FALSE, fig.height=4.05, fig.width=6}
+loadings_table_e4_ic <-  loadings_e4 %>% 
+  select(-c(op, std.lv, std.nox)) %>% 
+  filter(lhs=="IC")
+colnames(loadings_table_e4_ic) <- c('Dimensión', 'item', 'Estimación', 'Error std', 'Z', 'Valor-p', 'Cargas std')
+
+loadings_table_e4_ic <- ggtexttable(loadings_table_e4_ic, rows = NULL, theme = ttheme("mBlueWhite"))
+loadings_table_e4_ic
+
+```
+
+**Tabla 26. Cargas Factoriales de Vigilancia compartida (VC)**
+```{r table loadings VC e4, echo=FALSE, fig.height=2.37, fig.width=6}
+loadings_table_e4_vc <-  loadings_e4 %>% 
+  select(-c(op, std.lv, std.nox)) %>% 
+  filter(lhs=="VC")
+colnames(loadings_table_e4_vc) <- c('Dimensión', 'item', 'Estimación', 'Error std', 'Z', 'Valor-p', 'Cargas std')
+
+loadings_table_e4_vc <- ggtexttable(loadings_table_e4_vc, rows = NULL, theme = ttheme("mBlueWhite"))
+loadings_table_e4_vc
+
+```
+
+
+**Tabla 27. Cargas Factoriales de Reconocimiento (R)**
+```{r  table loadings R e4, echo=FALSE, fig.height=2.67, fig.width=6}
+loadings_table_e4_r <-  loadings_e4 %>% 
+  select(-c(op, std.lv, std.nox)) %>% 
+  filter(lhs=="R")
+colnames(loadings_table_e4_r) <- c('Dimensión', 'item', 'Estimación', 'Error std', 'Z', 'Valor-p', 'Cargas std')
+
+loadings_table_e4_r <- ggtexttable(loadings_table_e4_r, rows = NULL, theme = ttheme("mBlueWhite"))
+loadings_table_e4_r
+
+```
+
+**Tabla 28. Cargas Factoriales de Sanción (S)**
+```{r table loadings S e4, echo=FALSE, fig.height=2.7, fig.width=6}
+loadings_table_e4_s <-  loadings_e4 %>% 
+  select(-c(op, std.lv, std.nox)) %>% 
+  filter(lhs=="S")
+colnames(loadings_table_e4_s) <- c('Dimensión', 'item', 'Estimación', 'Error std', 'Z', 'Valor-p', 'Cargas std')
+
+loadings_table_e4_s <- ggtexttable(loadings_table_e4_s, rows = NULL, theme = ttheme("mBlueWhite"))
+loadings_table_e4_s
+
+```
+
+
+
+### Conclusiones parciales del análisis factorial
+En definitiva
+
+## Variables sociodemográficas y de trabajo
+En la presente sección se presenta un descriptivo de las variables sociodemográficas y de caracterización del trabajo, de la base de datos a analizar. Esto permite caracterizar la muestra e identificar algunos cruces de interés para las siguientes secciones. 
+
+### Variables sociodemográficas
+En el gráfico 1, a continuación, se presenta una descripción de la muestra de empresas entregada por la contraparte. Así, se puede observar que la mayoría de los trabajadores de la base corresponden a la empresa 4, representando un 40% de la muestra (800 en total). Luego, las empresas 1, 2 y 3 correspondieron a un 20% respectivamente (200 trabajadores de cada empresa). 
+
+**Gráfico 1. Distribución de empresas de la muestra**
+```{r distribución de empresas, echo=FALSE, fig.width=7.3,fig.height=5}
+# 2) Distribución total: edad, antiguedad, sexo,  nivel educativo, terreno y posición jerárquica 
+# 3) ¿Distribución por empresa: mismas variables?
+
+p1_aux <- df %>% 
+  count(empresa) %>% 
+  mutate(pct = n/ sum(n), 
+         pctlabel = paste0(round(pct*100), "%"))
+
+
+p1_p <- ggplot(p1_aux, aes(x = empresa, 
+               y = pct)) + 
+  geom_bar(stat = "identity",
+           fill = "cornflowerblue", 
+           color = "black") +
+  geom_text(aes(label = pctlabel), 
+            vjust = -0.25) + 
+  labs(y = "Porcentaje", 
+       x = "Empresa") + 
+  scale_y_continuous(breaks = c(0.2, 0.4, 0.6, 0.8, 1),
+                     labels = percent) +
+  coord_cartesian(ylim = c(0, 1)) +
+  theme_minimal()
+
+p1_t <- p1_aux %>% 
+  select(empresa, n, pctlabel) %>% 
+  rename(Empresa = empresa, 
+         N = n, 
+         Porcentaje = pctlabel)
+
+p1_t <- ggtexttable(p1_t, rows = NULL, theme = ttheme("mBlueWhite"))
+
+p1 <- ggarrange(p1_p, p1_t, ncol = 2, nrow = 1, widths = c(2, 1))
+
+p1
+
+```
+
+Luego los gráficos 2 y 3 presentan la distribución por sexo tanto para la muestra total como para cada empresa. 
+
+**Gráfico 2. Distribución de la muestra completa según sexo**
+```{r sexo total, echo=FALSE, fig.width=4.5,fig.height=3.7}
+p2_aux <- df %>%
+  count(sexo) %>%
+  arrange(desc(sexo)) %>%
+  mutate(prop = round(n*100/sum(n), digits = 1),
+         lab.ypos = cumsum(prop) - 0.5*prop)
+
+p2_aux$label <- paste0(round(p2_aux$prop), "%", 
+                        "\n(", p2_aux$n, ")")
+
+p2 <- ggplot(p2_aux, 
+               aes(x = "", 
+                   y = prop, 
+                   fill = sexo)) +
+  geom_bar(width = 1, 
+           stat = "identity", 
+           color = "black") +
+  geom_text(aes(y = lab.ypos, label = label), 
+            color = "black", 
+            size = 3.5) +
+  coord_polar("y", 
+              start = 0, 
+              direction = -1) +
+  scale_fill_manual(values = c("#2171B5","#BDD7E7")) +
+  theme_void() +
+  labs(fill = "Sexo",
+       caption = "Nota: n entre paréntesis")
+
+p2
+
+```
+
+Como se reporta en el gráfico, un 91% de los trabajadores de la muestra completa son hombres (1818 en total) y un 9% son mujeres (182 en total).
+
+**Gráfico 3. Distribución por sexo según empresas**
+```{r sexo empresa,echo=FALSE, fig.height=4.5, fig.width=4.5}
+p3_aux<- df %>% 
+  group_by(empresa, sexo) %>% 
+  summarize(n = n()) %>% 
+  mutate(pct = n/sum(n),
+         lbl = percent(pct), 
+         var_lbl = paste0(lbl, " (", n, ")"))
+
+p_item <- ggplot(p3_aux, aes(x = empresa, 
+                                 y = pct, 
+                                 fill = sexo)) + 
+  geom_bar(stat = "identity",
+           position = "fill", 
+           color = "black") +
+  scale_y_continuous(breaks = seq(0, 1, .2), 
+                     label = percent) +
+  geom_text(aes(label = var_lbl), 
+            size = 3.1,
+            position = position_stack(vjust = 0.5)) + 
+  labs(y = "", 
+       x = "", 
+       caption = "Nota: N de cada categoría entre paréntesis") +
+  scale_fill_manual(values = c("#2171B5","#BDD7E7")) +
+  theme_minimal()
+
+p_item + theme(legend.title = element_blank(), legend.position = "top")
+
+
+
+```
+
+Al analizar la distribución por sexo para cada empresa se presentan diferencias significativas entre las empresas 2 y 4 con las empresas 1 y 3. Así, mientras que para las empresas 1 y 3 las mujeres componen un 4% y 6% de sus trabajadores respectivamente, para las empresas 2 y 4, las mujeres corresponden a un 12% de sus trabajadores, respectivamente. 
+
+**Gráfico 4. Distribución de la muestra completa según tramo etario**
+```{r edad,echo=FALSE, fig.height=4.5, fig.width=7.2}
+p_aux <- df %>% 
+  count(edad) %>% 
+  mutate(pct = n/ sum(n), 
+         pctlabel = paste0(round(pct*100), "%"))
+
+
+p_p <- ggplot(p_aux, aes(x = edad, 
+               y = pct)) + 
+  geom_bar(stat = "identity",
+           fill = "cornflowerblue", 
+           color = "black") +
+  geom_text(aes(label = pctlabel), 
+            vjust = -0.25) + 
+  scale_y_continuous(breaks = seq(0, 1, .2),
+                     labels = percent) + 
+  coord_cartesian(ylim = c(0, 1)) +
+   labs(y = "", 
+       x = "Tramo etario") + 
+  theme_minimal()
+
+p_t <- p_aux %>% 
+  select(edad, n, pctlabel) %>% 
+  rename(Edad = edad, 
+         N = n, 
+         Porcentaje = pctlabel)
+
+p_t <- ggtexttable(p_t, rows = NULL, theme = ttheme("mBlueWhite"))
+
+p <- ggarrange(p_p, p_t, ncol = 2, nrow = 1, widths = c(2.1, 1.3))
+
+p
+
+```
+Respecto de la distribución de la muestra total según tramo etario se observa que la mayoría relativa de los trabajadores tienen  entre 31 y 40 años, alcanzando un 29% (584 en total). Ello es seguido por un 26% (525 en total) que tiene entre 18 y 30 años, y un 25% que tiene entre 41 y 50 años (495 en total). Un 20% de los trabajadores de la muestra tiene más de 51 años, alcanzando 396 en total. 
+
+**Gráfico 5. Distribución por tramo etario para cada empresa**
+```{r edad empresa, echo=FALSE, fig.height=4.5, fig.width=6}
+p3_aux<- df %>% 
+  group_by(empresa, edad) %>% 
+  summarize(n = n()) %>% 
+  mutate(pct = n/sum(n),
+         lbl = percent(pct), 
+         var_lbl = paste0(lbl, " (", n, ")"))
+
+p_item <- ggplot(p3_aux, aes(x = empresa, 
+                                 y = pct, 
+                                 fill = edad)) + 
+  geom_bar(stat = "identity",
+           position = "fill", 
+           color = "black") +
+  scale_y_continuous(breaks = seq(0, 1, .2), 
+                     label = percent) +
+  geom_text(aes(label = var_lbl), 
+            size = 3.1,
+            position = position_stack(vjust = 0.5)) + 
+  labs(y = "", 
+       x = "",
+       fill = "Tramo etario", 
+       caption = "Nota: N de cada categoría entre paréntesis") +
+  scale_fill_manual(values = c("#2171B5","#6BAED6","#BDD7E7", "#EFF3FF")) +
+  theme_minimal()
+
+p_item
+
+
+
+```
+
+Al analizar esta variable según empresas, se observa que la empresa 4 es la que presenta una mayor proporción de trabajadores de entre 18 y 30 años, representando un 27,5% del total de trabajadores de dicha empresa. Ello, es seguido por los trabajadores de la empresa 3 donde un 27,2% de sus trabajadores tiene entre 18 y 30 años. 
+Otro elemento destacable dentro del gráfico dice relación con que la empresa 1 es la que tiene una mayor proporción de trabajadores de entre 31 y 40 años, alcanzando un 32% de los trabajadores de dicha empresa. Así, en la empresa 4, es la segunda empresa con mayor proporción de trabajadores de entre 31 y 40 años alcanzando un 30,1%. 
+Las empresas con mayor proporción de trabajadores de entre 41 y 50 años fueron la empresa 3 y la 1, donde este grupo alcanzó un 27,2% y 25,2% de los trabajadores totales de la empresa respectivamente. Por último, la empresa 2 fue la que presentó una mayor proporción de trabajadores de 51 o más años (22,5%), seguido por la empresa 3 (21,2%). 
+
+**Gráfico 6. Distribución de la muestra según nivel educativo**
+```{r nivel educativo,echo=FALSE, fig.height=4.5, fig.width=7.5}
+p_aux <- df %>% 
+  count(nivel_educativo) %>% 
+  mutate(pct = n/ sum(n), 
+         pctlabel = paste0(round(pct*100), "%"))
+
+
+p_p <- ggplot(p_aux, aes(x = nivel_educativo, 
+               y = pct)) + 
+  geom_bar(stat = "identity",
+           fill = "cornflowerblue", 
+           color = "black") +
+  geom_text(aes(label = pctlabel), 
+            vjust = -0.25) + 
+  scale_y_continuous(breaks = seq(0, 1, .2),
+                     labels = percent) + 
+  coord_cartesian(ylim = c(0, 1)) +
+   labs(y = "", 
+       x = "Nivel Educativo") + 
+  theme_minimal()
+
+p_t <- p_aux %>% 
+  select(nivel_educativo, n, pctlabel) %>% 
+  rename('Nivel Educativo' = nivel_educativo, 
+         N = n, 
+         Porcentaje = pctlabel)
+
+p_t <- ggtexttable(p_t, rows = NULL, theme = ttheme("mBlueWhite"))
+
+p <- ggarrange(p_p, p_t, ncol = 2, nrow = 1, widths = c(2.1, 1.3))
+
+p
+
+```
+Respecto de la distribución de trabajadores según nivel educativo, se reporta que un 52% de los trabajadores de la muestra total poseen educación media (1033 en total), seguido por un 34% que tiene educación superior (688 en total). Un 13% de los trabajadores tiene exclusivamente educación básica (266 en total) y un 1% tiene posgrado (13 en total). 
+
+**Gráfico 7. Distribución por nivel educativo para cada empresa**
+```{r niv ed empresa,echo=FALSE, fig.height=4.5, fig.width=6}
+p3_aux<- df %>% 
+  group_by(empresa, nivel_educativo) %>% 
+  summarize(n = n()) %>% 
+  mutate(pct = n/sum(n),
+         lbl = percent(pct), 
+         var_lbl = paste0(lbl, " (", n, ")"))
+
+p_item <- ggplot(p3_aux, aes(x = empresa, 
+                                 y = pct, 
+                                 fill = nivel_educativo)) + 
+  geom_bar(stat = "identity",
+           position = "fill", 
+           color = "black") +
+  scale_y_continuous(breaks = seq(0, 1, .2), 
+                     label = percent) +
+  geom_text(aes(label = var_lbl), 
+            size = 3.1,
+            position = position_stack(vjust = 0.5)) + 
+  labs(y = "", 
+       x = "",
+       fill = "Nivel educativo", 
+       caption = "Nota: N de cada categoría entre paréntesis") +
+  scale_fill_manual(values = c("#2171B5","#6BAED6","#BDD7E7", "#EFF3FF")) +
+  theme_minimal()
+
+p_item
+
+
+```
+Al analizar el nivel educativo para cada empresa se observa que la empresa 4 es la que tiene una mayor proporción de trabajadores con educación básica (alcanzando un 20,7%), seguido por la empresa 2 donde un 14% tiene educación básica. Luego, la empresa con una mayor proporción de trabajadores con educación media fueron las empresas fue la empresa 1 donde un 58,2% de sus trabajadores ha alcanzado este nivel, seguido por la empresa 4 donde un 52,0% de sus trabajadores tiene educación media. 
+En términos de los profesionales y técnicos, la empresa 3 es la que tiene una mayor proporción de trabajadores con educación superior, lo que alcanza un  45,2% de sus trabajadores. Ello, es seguido po la empresa 2 donde un 40,5% de sus trabajadores tienen educación superior. La empresa 2, también es la que presenta la mayor proporción de trabajadores con posgrado, donde un 2% de los trabajadores de su empresa han alcanzado dicho nivel educativo (8 en total), seguido por la empresa 4 donde sólo un 0,4% de sus trabajadores tiene posgrado (3 en total).
+
+### Variables de caracterización del trabajo
+**Gráfico 8. Distribución de la muestra según Antigüedad en la empresa**
+```{r antiguedad,echo=FALSE, fig.height=4.5, fig.width=7.5}
+p_aux <- df %>% 
+  count(antiguedad) %>% 
+  mutate(pct = n/ sum(n), 
+         pctlabel = paste0(round(pct*100), "%"))
+
+
+p_p <- ggplot(p_aux, aes(x = antiguedad, 
+               y = pct)) + 
+  geom_bar(stat = "identity",
+           fill = "cornflowerblue", 
+           color = "black") +
+  geom_text(aes(label = pctlabel), 
+            vjust = -0.25) + 
+  scale_y_continuous(breaks = seq(0, 1, .2),
+                     labels = percent) + 
+  coord_cartesian(ylim = c(0, 1)) +
+   labs(y = "", 
+       x = "Antiguedad (en años)") + 
+  theme_minimal()
+
+p_t <- p_aux %>% 
+  select(antiguedad, n, pctlabel) %>% 
+  rename(Antigüedad = antiguedad, 
+         N = n, 
+         Porcentaje = pctlabel)
+
+p_t <- ggtexttable(p_t, rows = NULL, theme = ttheme("mBlueWhite"))
+
+p <- ggarrange(p_p, p_t, ncol = 2, nrow = 1, widths = c(2.4, 1.3))
+
+p
+
+
+```
+En términos de la antigüedad en la empresa de los trabajadores se observa que la mayoría de ellos trabajan hace menos de un año en la empresa, alcanzando un 47% de la muestra completa. Ello, es seguido por quienes trabajan de hace 1 y 2 años en la empresa y quienes trabajan desde hace entre 3 y 5 años en la empresa, alcanzando un 16% cada grupo respectivamente. Luego, un 11% trabaja en la empresa desde hace entre 6 y 10 años, un 7% trabaja desde hace entre 11 y 20 años y un 3% hace más de 20 años en la empresa. 
+
+**Gráfico 9. Distribución de antigüedad para cada empresa**
+```{r antiguedad empresa,echo=FALSE, fig.height=4.5, fig.width=6}
+p3_aux<- df %>% 
+  group_by(empresa, antiguedad) %>% 
+  summarize(n = n()) %>% 
+  mutate(pct = n/sum(n),
+         lbl = percent(pct), 
+         var_lbl = paste0(lbl, " (", n, ")"))
+
+p_item <- ggplot(p3_aux, aes(x = empresa, 
+                                 y = pct, 
+                                 fill = antiguedad)) + 
+  geom_bar(stat = "identity",
+           position = "fill", 
+           color = "black") +
+  scale_y_continuous(breaks = seq(0, 1, .2), 
+                     label = percent) +
+  geom_text(aes(label = var_lbl), 
+            size = 3.1,
+            position = position_stack(vjust = 0.5)) + 
+  labs(y = "", 
+       x = "",
+       fill = "Antigüedad \n(en años)", 
+       caption = "Nota: N de cada categoría entre paréntesis") +
+  scale_fill_manual(values = c("#08519C", "#3182BD", "#6BAED6", "#9ECAE1", "#C6DBEF", "#EFF3FF")) +
+  theme_minimal()
+
+p_item
+
+```
+Cuando se analiza la antigüedad para cada una de las empresas de la muestra se presentan diferencias significativas, así la empresa 4 es la que una mayor proporción de trabajadores que están en la empresa hace menos de un año, alcanzando un 64,4% de los trabajadores de la empresa. En esta empresa, ello es seguido por un 14,5% que trabaja hace entre 1 y 2 años. 
+La empresa 1, sigue un patron similar donde sus trabajadores están en la empresa hace relativamente poco tiempo. En ella un 50,75% de los trabajadores están hace menos de un año en la empresa, seguido por un 13% que está hace entre 3 a 5 años. Sin embargo, esta es la segunda empresa que tiene una mayor proporción de trabajadores hace más de 20 años, alcanzando un 3% de los casos y un 12,75% está hace entre 11 y 20 años en la empresa. 
+En la empresa 2 esta tendencia cambia parcialmente, dado que 22,75% de los trabajadores están en la empresa hace menos de un año, seguido por un 22,5% que está hace entre 1 y 2 años en la empresa. Esta empresa es la que cuenta con una mayor proporción de trabajadores de más antigüedad, donde un 8,75% tiene más de 20 años en la empresa, y un 9,5% tiene entre 11 y 20 años en la empresa. 
+Por último, en la empresa 3 la mayor proporción de trabajadores tiene entre 3 y 5 años en la empresa, alcanzando un 31,5%. Ello, es seguido por un 31,25% de los trabajadores de dicha empresa que tiene menos de un año en la empresa. 
+
+
+**Gráfico 10. Distribución de la muestra según posición jerárquica**
+```{r posjer, echo = FALSE, fig.height=4.5, fig.width=10}
+p_aux <- df %>% 
+  count(posjer_cod) %>% 
+  mutate(pct = n/ sum(n), 
+         pctlabel = paste0(round(pct*100), "%"))
+
+
+p_p <- ggplot(p_aux, aes(x = factor(posjer_cod, levels = c("Gerencia y/o Cargos directivos", "Técnicos y profesionales", "Soporte/Staff/Administración", "Jefaturas", "Supervisión", "Operarios", "Total muestra")), 
+               y = pct)) + 
+  geom_bar(stat = "identity",
+           fill = "cornflowerblue", 
+           color = "black") +
+  geom_text(aes(label = pctlabel), 
+            vjust = -0.25) + 
+  scale_y_continuous(breaks = seq(0, 1, .2),
+                     labels = percent) + 
+  coord_cartesian(ylim = c(0, 1)) +
+   labs(y = "", 
+       x = "Antiguedad (en años)") + 
+  coord_flip() +
+  theme_minimal()
+
+p_t <- p_aux %>% 
+  select(posjer_cod, n, pctlabel) %>% 
+  rename('Poisición jerárquica' = posjer_cod, 
+         N = n, 
+         Porcentaje = pctlabel)
+
+p_t <- ggtexttable(p_t, rows = NULL, theme = ttheme("mBlueWhite"))
+
+p <- ggarrange(p_p, p_t, ncol = 2, nrow = 1, widths = c(1, 0.7))
+
+p
+
+```
+En términos de la distribución de las posiciones jerárquicas se observa que un 70% de la muestra corresponde a operarios (siendo 1395 trabajadores), seguido por un 10% de técnicos y profesionales (204 en total). Un 8% de los trabajadores de la muestra tienen la posición de supervisión, y un 6% a trabajadores de soporte, staff o administración. Un 4% corresponden a jefaturas y un 2% a gerencia y/o cargos directivos. 
+
+**Gráfico 11. Distribución de posición jerárquica para cada empresa**
+```{r posjer empresa, echo = FALSE, fig.height=5, fig.width=7.3}
+p3_aux<- df %>% 
+  group_by(empresa, posjer_cod) %>% 
+  summarize(n = n()) %>% 
+  mutate(pct = n/sum(n),
+         lbl = percent(pct), 
+         var_lbl = paste0(lbl, " (", n, ")"))
+
+p_item <- ggplot(p3_aux, aes(x = empresa, 
+                                 y = pct, 
+                                 fill = posjer_cod)) + 
+  geom_bar(stat = "identity",
+           position = "fill", 
+           color = "black") +
+  scale_y_continuous(breaks = seq(0, 1, .2), 
+                     label = percent) +
+  geom_text(aes(label = var_lbl), 
+            size = 3.1,
+            position = position_stack(vjust = 0.5)) + 
+  labs(y = "", 
+       x = "",
+       fill = "Posición jerárquica", 
+       caption = "Nota: N de cada categoría entre paréntesis") +
+  scale_fill_manual(values = c("#08519C", "#3182BD", "#6BAED6", "#9ECAE1", "#C6DBEF", "#EFF3FF")) +
+  theme_minimal()
+
+p_item
+
+```
+Cuando se analiza esta información según empresa se observa que la distribución de las posiciones jerárquicas tiene diferencias significativas por empresa. Así para la empresa 1, un 68% de los trabajadores corresponden a operarios y ello es seguido por un 19,5% que corresponden a cargos técnicos y profesionales. Por su parte, la empresa 2 es la que cuenta con una menor proporción de operarios, aun cuando estos representan un 52,5% de los trabajadores de la empresa. Ello, es seguido por un 20,5% de los trabajadores de dicha empresa que cumplen funciones de soporte, staff o administración.
+La empresa 3 es la que cuenta con la mayor proporción de trabajadores con cargos directivos o de gerencia, alcanzando un 5,25% de los trabajadores de la empresa. En esta empresa, un 69,25% corresponden a operarios y ello es seguido por un 11,25% que cumplen cargos de supervisión. 
+La empresa 4, por su parte, es la que cuenta con una mayor proporción de operarios, alcanzando un 79,5% de los trabajadores de la empresa. Luego, en dicha empresa, un 11,12% de los trabajadores tienen cargos técnicos y profesionales. Asimismo, es la que tiene menos trabajadores en cargos directivos o de gerencia, alcanzando sólo un 0,38%.
+
+**Gráfico 12. Distribución de la muestra según Terreno**
+```{r terreno empresa, echo=FALSE, fig.width=5, fig.height=4}
+p2_aux <- df %>%
+  count(Terreno) %>%
+  arrange(desc(Terreno)) %>%
+  mutate(prop = round(n*100/sum(n), digits = 1),
+         lab.ypos = cumsum(prop) - 0.5*prop)
+
+p2_aux$label <- paste0(round(p2_aux$prop), "%", 
+                        "\n(", p2_aux$n, ")")
+
+p2 <- ggplot(p2_aux, 
+               aes(x = "", 
+                   y = prop, 
+                   fill = Terreno)) +
+  geom_bar(width = 1, 
+           stat = "identity", 
+           color = "black") +
+  geom_text(aes(y = lab.ypos, label = label), 
+            color = "black", 
+            size = 3.5) +
+  coord_polar("y", 
+              start = 0, 
+              direction = -1) +
+  scale_fill_manual(values = c("#2171B5","#BDD7E7")) +
+  theme_void() +
+  labs(fill = "Terreno",
+       caption = "Nota: n entre paréntesis")
+
+p2
+
+
+```
+
+Luego el gráfico 12, presenta la distribución de los trabajadores según si su centro de trabajo es de terreno o es más bien administrativo. Así, se observa que un 90% de los trabajadores realizan sus labores en terreno (1805 en total), mientras que un 10% trabajan en centros de trabajo fundamentalmente administrativos (195 en total).
+
+**Gráfico 13. Distribución de Terreno para cada empresa**
+```{r Terreno empresa,echo=FALSE, fig.height=4.5, fig.width=5.5}
+p3_aux<- df %>% 
+  group_by(empresa, Terreno) %>% 
+  summarize(n = n()) %>% 
+  mutate(pct = n/sum(n),
+         lbl = percent(pct), 
+         var_lbl = paste0(lbl, " (", n, ")"))
+
+p_item <- ggplot(p3_aux, aes(x = empresa, 
+                                 y = pct, 
+                                 fill = Terreno)) + 
+  geom_bar(stat = "identity",
+           position = "fill", 
+           color = "black") +
+  scale_y_continuous(breaks = seq(0, 1, .2), 
+                     label = percent) +
+  geom_text(aes(label = var_lbl), 
+            size = 3.1,
+            position = position_stack(vjust = 0.5)) + 
+  labs(y = "", 
+       x = "", 
+       caption = "Nota: N de cada categoría entre paréntesis") +
+  scale_fill_manual(values = c("#2171B5","#BDD7E7")) +
+  theme_minimal()
+
+p_item + theme(legend.title = element_blank(), legend.position = "top")
+
+
+
+```
+Cuando se observa la distribución de trabajadores por terreno para cada empresa, se observan algunas diferencias a considerar. En primera medida, la empresa 2 es la que cuenta con una menor proporción de trabajadores de terreno, lo que representa un 76% de sus trabajadores. Por el contrario, la empresa 4 es la que presenta una mayor proporción de trabajadores en centros de trabajo de terreno, representando un 98% de los trabajadores de dicha empresa. 
+Luego, otra variable de interés identificada en la base de datos corresponde a si los trabajadores trabajan para la empresa principal o para una contratista de la empresa. Esta variable se pudo observar exclusivamente en la empresa 4, como se presenta en el gráfico a continuación.
+
+**Gráfico 14. Distribución de trabajadores contratistas Empresa 4**
+```{r contratista,echo=FALSE, fig.height=4, fig.width=5.5}
+p2_aux <- empresa4 %>%
+  count(contratista) %>%
+  arrange(desc(contratista)) %>%
+  mutate(prop = round(n*100/sum(n), digits = 1),
+         lab.ypos = cumsum(prop) - 0.5*prop)
+
+p2_aux$label <- paste0(round(p2_aux$prop), "%", 
+                        "\n(", p2_aux$n, ")")
+
+p2 <- ggplot(p2_aux, 
+               aes(x = "", 
+                   y = prop, 
+                   fill = contratista)) +
+  geom_bar(width = 1, 
+           stat = "identity", 
+           color = "black") +
+  geom_text(aes(y = lab.ypos, label = label), 
+            color = "black", 
+            size = 3.5) +
+  coord_polar("y", 
+              start = 0, 
+              direction = -1) +
+  scale_fill_manual(values = c("#2171B5","#BDD7E7")) +
+  theme_void() +
+  labs(fill = "",
+       caption = "Nota: n entre paréntesis")
+
+p2
+
+
+```
+Según se presenta, se puede apreciar que en la empresa 4 un 63% de los trabajadores son de la empresa principal (507 en total), mientras que un 37% provienen de una empresa contratista (293 en total)
+
+### Cruces de interés entre variables sociodemográficas y de trabajo
+
+
+
+## Adherencia a la seguridad reglada
+Por adherencia XXX entendemos esto xxxx.
+
+*Descriptivo general*
+```{r}
+
+
+```
+
+
+*Cruces de factores de interés de la dimensión descriptores de interés*
+
+
+## Retorno de la experiencia
+
+```{r}
+
+```
+
+
+## Información y conocimiento
+
+```{r}
+
+```
+
+
+## Vigilancia compartida
+
+```{r}
+
+```
+
+
+## Reconocimiento
+
+```{r}
+
+```
+
+
+## Sanción
+
+```{r}
+
+```
+
+
+### Referencias utilizadas
+
+Brown, T. A., & Moore, M. T. (2012).*Confirmatory factor analysis*. Handbook of structural equation modeling, 361-379

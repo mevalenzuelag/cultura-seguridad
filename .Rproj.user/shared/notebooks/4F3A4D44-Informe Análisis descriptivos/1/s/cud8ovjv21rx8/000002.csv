@@ -1,0 +1,8 @@
+"0","df <- read_excel(""Base Cultura de Seguridad 08 de septiembre 2021.xlsx"")"
+"0","df <- arrange(df, empresa) %>% "
+"0","  mutate(antiguedad_exacta = na_if(antiguedad_exacta, ""-"")) %>%"
+"0","  mutate(empresa = str_extract(empresa, 'Empresa [:digit:]'))"
+"0",""
+"0","#Cambio edad exacta "
+"0","df$edad_exacta <- as.numeric(df$edad_exacta)"
+"2","NAs introducidos por coerción"

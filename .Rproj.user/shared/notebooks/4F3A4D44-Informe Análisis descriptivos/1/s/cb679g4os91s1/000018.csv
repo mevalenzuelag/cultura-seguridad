@@ -1,0 +1,8 @@
+"0","standard <- fitmeasures(fit1, c('cfi', 'tli', 'rmsea'))"
+"0","robust <- fitmeasures(fit1, c('cfi.scaled', 'tli.scaled', 'rmsea.scaled'))"
+"0",""
+"0","modelfit1 <- tibble('Medida de ajuste' = c(""CFI"", ""TLI"", ""RMSEA""), Estándar = standard, Robusto = robust)"
+"0",""
+"0","modelfit1<- ggtexttable(modelfit1, rows = NULL, theme = ttheme(""mBlueWhite""))"
+"0","modelfit1"
+"0",""

@@ -1,0 +1,27 @@
+{
+    "id": "EC1B896D",
+    "path": "D:/Trabajo - Estudios/FLACSO/Cultura de Seguridad/Informe 1- Análisis descriptivos de la base de datos/cultura-seguridad/Informe Análisis descriptivos.Rmd",
+    "project_path": "Informe Análisis descriptivos.Rmd",
+    "type": "r_markdown",
+    "hash": "2736001483",
+    "contents": "",
+    "dirty": false,
+    "created": 1631804444479.0,
+    "source_on_save": false,
+    "relative_order": 2,
+    "properties": {
+        "source_window_id": "",
+        "Source": "Source",
+        "cursorPosition": "1582,0",
+        "scrollLine": "1579",
+        "last_setup_crc32": "1484720Bf8f3197e"
+    },
+    "folds": "11|27|27|0|\n29|30|38|0|\n40|43|56|0|\n58|41|97|0|\n99|38|113|0|\n523|13|544|0|\n548|34|1067|0|\n552|35|574|0|\n578|55|581|0|\n587|60|596|0|\n602|69|614|0|\n618|69|626|0|\n630|69|639|0|\n642|69|651|0|\n655|69|664|0|\n667|67|676|0|\n681|35|705|0|\n709|55|712|0|\n718|59|726|0|\n732|69|744|0|\n748|69|756|0|\n760|69|769|0|\n772|69|781|0|\n785|69|794|0|\n797|67|806|0|\n811|35|834|0|\n837|55|840|0|\n845|59|854|0|\n860|69|872|0|\n876|69|884|0|\n888|69|897|0|\n900|69|909|0|\n913|69|922|0|\n925|67|934|0|\n938|35|961|0|\n972|59|981|0|\n987|69|999|0|\n1003|69|1011|0|\n1015|69|1024|0|\n1027|69|1036|0|\n1040|69|1049|0|\n1052|67|1061|0|\n1075|71|1111|0|\n1116|59|1146|0|\n1151|61|1180|0|\n1185|53|1218|0|\n1222|60|1252|0|\n1259|64|1292|0|\n1296|61|1325|0|\n1331|59|1365|0|\n1369|65|1397|0|\n1405|57|1439|0|\n1443|64|1471|0|\n1513|64|1542|0|\n",
+    "lastKnownWriteTime": 1632946667,
+    "encoding": "UTF-8",
+    "collab_server": "",
+    "source_window": "",
+    "last_content_update": 1632946667583,
+    "read_only": false,
+    "read_only_alternatives": []
+}

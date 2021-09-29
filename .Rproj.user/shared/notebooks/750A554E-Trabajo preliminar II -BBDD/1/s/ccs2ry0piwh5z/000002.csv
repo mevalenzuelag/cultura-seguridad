@@ -1,0 +1,7 @@
+"0",""
+"0",""
+"0","base_final <- base_final %>% "
+"0","  mutate(guardia = ifelse(posicion_jerarquica == ""Guardia Contratista"" | posicion_jerarquica == ""Guardia Ingevec"", ""Si"", ""No""))"
+"0",""
+"0",""
+"0",""

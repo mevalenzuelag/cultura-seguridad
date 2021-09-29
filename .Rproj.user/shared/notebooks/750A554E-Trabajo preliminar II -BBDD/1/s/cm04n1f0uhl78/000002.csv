@@ -1,0 +1,8 @@
+"0","library(stringr)"
+"0",""
+"0","base_final <- base_final %>%"
+"0","  mutate(contratista = ifelse(grepl(""Contratista"", base_final$posicion_jerarquica), ""Si"", ""No""))"
+"0",""
+"0","write_xlsx(base_final, ""Base Cultura de Seguridad 08 de septiembre 2021.xlsx"")"
+"0","  "
+"0",""

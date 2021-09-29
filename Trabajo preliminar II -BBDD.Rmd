@@ -1,0 +1,274 @@
+---
+title: "Trabajo preliminar BDD CdS II"
+author: "Manuel Valenzuela"
+date: "09-08-2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Parte 2 - Trabajo preliminar BBDD
+Como algunos arreglos lo hice a mano generé un nuevo documento con los nuevos trabajos sobre la BBDD. Todos los análsis presentados en el siguiente informe son preliminares y están sujetos a discusión del equipo. 
+
+Cargo la base
+```{r}
+library(readxl)
+library(tidyverse)
+library(flextable)
+library(janitor)
+library(writexl)
+
+
+base <- read_excel("Base Completa Cultura de Seguridad v2.xlsx") #OJO edad exacta como chr, si la trabajamos hay que cambiar esto 
+
+aux1 <- base %>%
+  filter(empresa=="Empresa 1 - Bbosch")
+
+aux2 <- base %>%
+  filter(empresa=="Empresa 2 - Bitumix")
+
+aux3 <- base %>%
+  filter(empresa=="Empresa 3 - Nexxo")
+
+aux4 <- base %>%
+  filter(empresa=="Empresa 4 - Ingevec")
+
+
+
+```
+
+
+Constrastar Centro de trabajo con Terreno/No terreno
+
+```{r}
+df_cent_ter <- read_excel("terreno_centro.xlsx")
+
+#Imputo valores al df original
+
+base_final <- merge(base, df_cent_ter)
+
+library (janitor)
+library(flextable)
+
+base_final %>%
+  tabyl(centro_trabajo, antiguedad) %>%
+  adorn_totals(where = "both") %>% 
+  adorn_percentages(denominator = "row") %>%
+  adorn_pct_formatting(digits = 2) %>%
+  adorn_ns(position = "front") %>%
+  adorn_title(row_name = "Centro de trabajo", col_name = "Terreno", placement = "combined") %>%
+  flextable() %>%
+  autofit()
+
+```
+
+
+#Genero una variable que idenfique guardias
+```{r}
+
+
+base_final <- base_final %>% 
+  mutate(guardia = ifelse(posicion_jerarquica == "Guardia Contratista" | posicion_jerarquica == "Guardia Ingevec", "Si", "No"))
+
+
+
+```
+
+Variable que identifique contrastita o no en la base 4
+```{r}
+library(stringr)
+
+base_final <- base_final %>%
+  mutate(contratista = ifelse(grepl("Contratista", base_final$posicion_jerarquica), "Si", "No"))
+
+write_xlsx(base_final, "Base Cultura de Seguridad 08 de septiembre 2021.xlsx")
+  
+
+```
+
+## Análisis Factorial
+
+Base Completa
+```{r}
+
+bdfull_cfa <- base %>%
+  select("item13", "item16","item17", "item19", "item20", "item21", "item22", "item23", "item24", "item26", "item31", "item38", "item18", "item27",
+         "item36", "item37", "item39", "item42", "item46", "item47", "item55", "item57", "item58", "item59", "item61", "item62", "item63", "item1",
+         "item2", "item3", "item4", "item5", "item7", "item8", "item9", "item10", "item11", "item14", "item15", "item28", "item12", "item25", "item33",
+         "item43","item45", "item53", "item60", "item29", "item30", "item44", "item49", "item50", "item51", "item52", "item54",
+                                             "item6", "item32", "item34", "item35", "item40", "item41", "item48", "item56")
+
+library(lavaan)
+model <- '
+ASR =~ item13 + item16 + item17 + item19 + item20 + item21 + item22 + item23 + item24 + item26 + item 31 + item38
+RE =~ item18 + item27 + item36 + item37 + item39 + item42 + item46 + item 47 + item55 + item57 + item58 + item59 + item61 + item62 + item63
+IC =~ item1 + item2 + item3 + item4 + item5 + item7 + item8 + item9 + item10 + item11 + item14 + item15 + item28
+VC =~ item12 + item25 + item33 + item43 + item45 + item53 + item60
+R =~  item29+ item30+ item44+ item49+ item50+ item51+ item52+ item54
+S =~  item6 + item32 + item34 + item35 + item40 + item41 + item48 + item56'
+
+# Factor 1 = Adherencia a la seguridad reglada
+# Factor 2 = Retorno de la experiencia
+# Factor 3 = Información y conocimiento
+# Factor 4 = Vigilancia compartida
+# Factor 5 = Reconocimiento
+# Factor 6 = Sanción
+
+fit <- cfa(model, data=bdfull_cfa, ordered=c("item13", "item16","item17", "item19", "item20", "item21", "item22", "item23", "item24", "item26", "item31",
+                                             "item38", "item18", "item27", "item36", "item37", "item39", "item42", "item46", "item47", "item55", "item57",
+                                             "item58", "item59", "item61", "item62", "item63", "item1", "item2", "item3", "item4", "item5", "item7",
+                                             "item8", "item9", "item10", "item11", "item14", "item15", "item28", "item12", "item25", "item33", "item43",
+                                             "item45", "item53", "item60", "item29", "item30", "item44", "item49", "item50", "item51", "item52", "item54",
+                                             "item6", "item32", "item34", "item35", "item40", "item41", "item48", "item56"))
+summary(fit, fit.measures=T)
+
+
+```
+
+
+Empresa 1
+```{r}
+bdfull_cfa <- aux1 %>%
+  select("item13", "item16","item17", "item19", "item20", "item21", "item22", "item23", "item24", "item26", "item31", "item38", "item18", "item27",
+         "item36", "item37", "item39", "item42", "item46", "item47", "item55", "item57", "item58", "item59", "item61", "item62", "item63", "item1",
+         "item2", "item3", "item4", "item5", "item7", "item8", "item9", "item10", "item11", "item14", "item15", "item28", "item12", "item25", "item33",
+         "item43","item45", "item53", "item60", "item29", "item30", "item44", "item49", "item50", "item51", "item52", "item54",
+                                             "item6", "item32", "item34", "item35", "item40", "item41", "item48", "item56")
+
+library(lavaan)
+model <- '
+ASR =~ item13 + item16 + item17 + item19 + item20 + item21 + item22 + item23 + item24 + item26 + item 31 + item38
+RE =~ item18 + item27 + item36 + item37 + item39 + item42 + item46 + item 47 + item55 + item57 + item58 + item59 + item61 + item62 + item63
+IC =~ item1 + item2 + item3 + item4 + item5 + item7 + item8 + item9 + item10 + item11 + item14 + item15 + item28
+VC =~ item12 + item25 + item33 + item43 + item45 + item53 + item60
+R =~  item29+ item30+ item44+ item49+ item50+ item51+ item52+ item54
+S =~  item6 + item32 + item34 + item35 + item40 + item41 + item48 + item56'
+
+# Factor 1 = Adherencia a la seguridad reglada
+# Factor 2 = Retorno de la experiencia
+# Factor 3 = Información y conocimiento
+# Factor 4 = Vigilancia compartida
+# Factor 5 = Reconocimiento
+# Factor 6 = Sanción
+
+fit <- cfa(model, data=bdfull_cfa, ordered=c("item13", "item16","item17", "item19", "item20", "item21", "item22", "item23", "item24", "item26", "item31",
+                                             "item38", "item18", "item27", "item36", "item37", "item39", "item42", "item46", "item47", "item55", "item57",
+                                             "item58", "item59", "item61", "item62", "item63", "item1", "item2", "item3", "item4", "item5", "item7",
+                                             "item8", "item9", "item10", "item11", "item14", "item15", "item28", "item12", "item25", "item33", "item43",
+                                             "item45", "item53", "item60", "item29", "item30", "item44", "item49", "item50", "item51", "item52", "item54",
+                                             "item6", "item32", "item34", "item35", "item40", "item41", "item48", "item56"))
+summary(fit, fit.measures=T)
+
+```
+
+Empresa 2
+```{r}
+bdfull_cfa <- aux2 %>%
+  select("item13", "item16","item17", "item19", "item20", "item21", "item22", "item23", "item24", "item26", "item31", "item38", "item18", "item27",
+         "item36", "item37", "item39", "item42", "item46", "item47", "item55", "item57", "item58", "item59", "item61", "item62", "item63", "item1",
+         "item2", "item3", "item4", "item5", "item7", "item8", "item9", "item10", "item11", "item14", "item15", "item28", "item12", "item25", "item33",
+         "item43","item45", "item53", "item60", "item29", "item30", "item44", "item49", "item50", "item51", "item52", "item54",
+                                             "item6", "item32", "item34", "item35", "item40", "item41", "item48", "item56")
+
+library(lavaan)
+model <- '
+ASR =~ item13 + item16 + item17 + item19 + item20 + item21 + item22 + item23 + item24 + item26 + item 31 + item38
+RE =~ item18 + item27 + item36 + item37 + item39 + item42 + item46 + item 47 + item55 + item57 + item58 + item59 + item61 + item62 + item63
+IC =~ item1 + item2 + item3 + item4 + item5 + item7 + item8 + item9 + item10 + item11 + item14 + item15 + item28
+VC =~ item12 + item25 + item33 + item43 + item45 + item53 + item60
+R =~  item29+ item30+ item44+ item49+ item50+ item51+ item52+ item54
+S =~  item6 + item32 + item34 + item35 + item40 + item41 + item48 + item56'
+
+# Factor 1 = Adherencia a la seguridad reglada
+# Factor 2 = Retorno de la experiencia
+# Factor 3 = Información y conocimiento
+# Factor 4 = Vigilancia compartida
+# Factor 5 = Reconocimiento
+# Factor 6 = Sanción
+
+fit <- cfa(model, data=bdfull_cfa, ordered=c("item13", "item16","item17", "item19", "item20", "item21", "item22", "item23", "item24", "item26", "item31",
+                                             "item38", "item18", "item27", "item36", "item37", "item39", "item42", "item46", "item47", "item55", "item57",
+                                             "item58", "item59", "item61", "item62", "item63", "item1", "item2", "item3", "item4", "item5", "item7",
+                                             "item8", "item9", "item10", "item11", "item14", "item15", "item28", "item12", "item25", "item33", "item43",
+                                             "item45", "item53", "item60", "item29", "item30", "item44", "item49", "item50", "item51", "item52", "item54",
+                                             "item6", "item32", "item34", "item35", "item40", "item41", "item48", "item56"))
+summary(fit, fit.measures=T)
+
+```
+
+
+Empresa C
+```{r}
+bdfull_cfa <- aux3 %>%
+  select("item13", "item16","item17", "item19", "item20", "item21", "item22", "item23", "item24", "item26", "item31", "item38", "item18", "item27",
+         "item36", "item37", "item39", "item42", "item46", "item47", "item55", "item57", "item58", "item59", "item61", "item62", "item63", "item1",
+         "item2", "item3", "item4", "item5", "item7", "item8", "item9", "item10", "item11", "item14", "item15", "item28", "item12", "item25", "item33",
+         "item43","item45", "item53", "item60", "item29", "item30", "item44", "item49", "item50", "item51", "item52", "item54",
+                                             "item6", "item32", "item34", "item35", "item40", "item41", "item48", "item56")
+
+library(lavaan)
+model <- '
+ASR =~ item13 + item16 + item17 + item19 + item20 + item21 + item22 + item23 + item24 + item26 + item 31 + item38
+RE =~ item18 + item27 + item36 + item37 + item39 + item42 + item46 + item 47 + item55 + item57 + item58 + item59 + item61 + item62 + item63
+IC =~ item1 + item2 + item3 + item4 + item5 + item7 + item8 + item9 + item10 + item11 + item14 + item15 + item28
+VC =~ item12 + item25 + item33 + item43 + item45 + item53 + item60
+R =~  item29+ item30+ item44+ item49+ item50+ item51+ item52+ item54
+S =~  item6 + item32 + item34 + item35 + item40 + item41 + item48 + item56'
+
+# Factor 1 = Adherencia a la seguridad reglada
+# Factor 2 = Retorno de la experiencia
+# Factor 3 = Información y conocimiento
+# Factor 4 = Vigilancia compartida
+# Factor 5 = Reconocimiento
+# Factor 6 = Sanción
+
+fit <- cfa(model, data=bdfull_cfa, ordered=c("item13", "item16","item17", "item19", "item20", "item21", "item22", "item23", "item24", "item26", "item31",
+                                             "item38", "item18", "item27", "item36", "item37", "item39", "item42", "item46", "item47", "item55", "item57",
+                                             "item58", "item59", "item61", "item62", "item63", "item1", "item2", "item3", "item4", "item5", "item7",
+                                             "item8", "item9", "item10", "item11", "item14", "item15", "item28", "item12", "item25", "item33", "item43",
+                                             "item45", "item53", "item60", "item29", "item30", "item44", "item49", "item50", "item51", "item52", "item54",
+                                             "item6", "item32", "item34", "item35", "item40", "item41", "item48", "item56"))
+summary(fit, fit.measures=T)
+
+
+```
+
+Empresa D
+```{r}
+bdfull_cfa <- aux4 %>%
+  select("item13", "item16","item17", "item19", "item20", "item21", "item22", "item23", "item24", "item26", "item31", "item38", "item18", "item27",
+         "item36", "item37", "item39", "item42", "item46", "item47", "item55", "item57", "item58", "item59", "item61", "item62", "item63", "item1",
+         "item2", "item3", "item4", "item5", "item7", "item8", "item9", "item10", "item11", "item14", "item15", "item28", "item12", "item25", "item33",
+         "item43","item45", "item53", "item60", "item29", "item30", "item44", "item49", "item50", "item51", "item52", "item54",
+                                             "item6", "item32", "item34", "item35", "item40", "item41", "item48", "item56")
+
+library(lavaan)
+model <- '
+ASR =~ item13 + item16 + item17 + item19 + item20 + item21 + item22 + item23 + item24 + item26 + item 31 + item38
+RE =~ item18 + item27 + item36 + item37 + item39 + item42 + item46 + item 47 + item55 + item57 + item58 + item59 + item61 + item62 + item63
+IC =~ item1 + item2 + item3 + item4 + item5 + item7 + item8 + item9 + item10 + item11 + item14 + item15 + item28
+VC =~ item12 + item25 + item33 + item43 + item45 + item53 + item60
+R =~  item29+ item30+ item44+ item49+ item50+ item51+ item52+ item54
+S =~  item6 + item32 + item34 + item35 + item40 + item41 + item48 + item56'
+
+# Factor 1 = Adherencia a la seguridad reglada
+# Factor 2 = Retorno de la experiencia
+# Factor 3 = Información y conocimiento
+# Factor 4 = Vigilancia compartida
+# Factor 5 = Reconocimiento
+# Factor 6 = Sanción
+
+fit <- cfa(model, data=bdfull_cfa, ordered=c("item13", "item16","item17", "item19", "item20", "item21", "item22", "item23", "item24", "item26", "item31",
+                                             "item38", "item18", "item27", "item36", "item37", "item39", "item42", "item46", "item47", "item55", "item57",
+                                             "item58", "item59", "item61", "item62", "item63", "item1", "item2", "item3", "item4", "item5", "item7",
+                                             "item8", "item9", "item10", "item11", "item14", "item15", "item28", "item12", "item25", "item33", "item43",
+                                             "item45", "item53", "item60", "item29", "item30", "item44", "item49", "item50", "item51", "item52", "item54",
+                                             "item6", "item32", "item34", "item35", "item40", "item41", "item48", "item56"))
+summary(fit, fit.measures=T)
+
+
+```
+
+

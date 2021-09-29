@@ -1,0 +1,395 @@
+---
+title: Informe 1 - Cultura de Seguridad. Análisis descriptivos
+author: FLACSO-Chile. Programa Trabajo, Empleo, Equidad y Salud (TEES)
+date: 09 de septiembre de 2021
+lang: 'es'
+output: 
+  word_document: 
+    toc: yes
+
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(readxl)
+library(scales)
+library(ggpubr) #grid
+library(sjlabelled)
+
+theme_update(plot.title = element_text(hjust = 0.5))
+
+```
+
+```{r lectura base, include=F}
+df <- read_excel("Base Cultura de Seguridad 08 de septiembre 2021.xlsx")
+df <- arrange(df, empresa) %>% 
+  mutate(antiguedad_exacta = na_if(antiguedad_exacta, "-")) %>%
+  mutate(empresa = str_extract(empresa, 'Empresa [:digit:]'))
+
+#Cambio edad exacta 
+df$edad_exacta <- as.numeric(df$edad_exacta)
+
+```
+
+```{r etiquetado de variables, include=F}
+#Ajusto y ordeno el etiquetado de las variables que ya tengo
+  # Nivel Educativo, Edad y Antiguedad
+df <- df %>% 
+  mutate(nivel_educativo = case_when(nivel_educativo == "Educación Básica" ~ "Básica", 
+                                     nivel_educativo == "Educación Media" ~ "Media", 
+                                     nivel_educativo == "Universitaria y/o técnica" ~ "Superior", 
+                                     nivel_educativo == "Postgrado" ~ "Posgrado"), 
+         edad = sub("Entre", "", edad), 
+         antiguedad = sub("\\s[^ ]+$", "", antiguedad)) 
+
+  #Ordeno las etiquetas para que figuren bien en el gráfico
+# Nivel Educativo
+df$nivel_educativo <- factor(df$nivel_educativo, levels = c("Básica", "Media", "Superior", "Posgrado"))
+
+#Antiguedad
+df$antiguedad <- factor(df$antiguedad, levels = c("Menos de 1", "De 1 a 2", "De 2 a 5", "De 6 a 10", "De 11 a 20", "Más de 20"))
+
+#Posición jerarquica (Que quede algo así como de más a menos)
+df$posjer_cod <- factor(df$posjer_cod, levels = c("Gerencia y/o Cargos directivos", "Técnicos y profesionales", "Soporte/Staff/Administración", "Jefaturas", "Supervisión", "Operarios"))
+
+#Etiquetas items. Quizás me podrían ayudar con esto! HAcer una bd con el número del ítem y la pregunta asociada 
+#Con esto podría poner los títulos
+
+
+
+#Etiquetas categorías de respuesta. uuh, automaticemos? sisisisi
+#df[8:70] <- items 
+
+etiquetas_items <- c('Casi nunca' = 1, 
+                     'Algunas veces' = 2,
+                     'Frecuentemente' = 3,
+                     'Casi siempre' = 4)
+
+df1 <- df
+
+```
+
+```{r base por empresa, include=FALSE}
+#Base por empresa
+empresa1 <- df %>%
+  filter(empresa=="Empresa 1")
+
+empresa2 <- df %>%
+  filter(empresa=="Empresa 2")
+
+empresa3 <- df %>%
+  filter(empresa=="Empresa 3")
+
+empresa4 <- df %>%
+  filter(empresa=="Empresa 4")
+
+```
+
+# Metodología
+HOLA EQUIPO, DEJO ESTA MARCA PORQUE FIJO SE ME OLVIDA. NECESITAMOS ESTAR SEGUROS DE QUE TODAS LAS ETIQUETAS DE LOS ITEMS SE CORRESPONDEN EN UN MISMO ORDEN (POR EJ, QUE NO PASE QUE PARA EL ITEM1 UN VALOR 4 SEA CASI SIEMPRE, MIENTRAS QUE PARA EL ITEM12 SEA CASI NUNCA)
+
+Tareas: 
+- Cruces de interés sociodem (general): 
+    1) Antiguedad x nivel educativo
+    2) Edad x nivel educativo 
+    3) Edad x posición jerárquica
+    4) Contratista x antiguedad (empresa 4)
+    5) (Antiguedad, nivel educativo, posición jerárquica) x terreno
+
+- Cruces de los items: 
+    1) Cruzar preguntas importantes (carga factorial más alta) con 'variable de trabajo'(posición jerarquica, terreno, antiguedad, y en empresa 4 contratista)
+
+
+Mirar: contratista por centro de trabajo (cruces)
+
+## Manejo de la base de datos
+Para el presente análisis se utilizó una muestra aleatoría obtenida de las encuestas de 4 empresas. Estas empresas corresponden a los rubros de XX, XX. Así, la muestra total trabajada correspondió a 2000 trabajadores. Luego de recibir la base de datos el equipo investigador evaluó la información y definió algunos ajustes a las variables de edad, antigüedad, nivel educativo y posición jerárquica de manera de homologar las categorías. Asimismo, se generó una variable que identificara si el centro de trabajo correspondía a uno en terreno o a uno administrativo. 
+Por otra parte, se generaron variables auxiliares que identifican a guardias y a trabajadores de empresas contratistas para la empresa 4 para particularizar algunos análisis que se realizaron con estos datos. 
+
+## Análisis psicométrico
+Para validar las dimensiones obtenidas en el estudio de XXXX(CITAR), se realizó un análisis factorial confirmatorio (AFC). Este análisis corresponde a XXXXX (CITAR).  
+
+## Análisis descriptivo
+Comentar: 
+1) Descriptores
+2) Qué análisis se hizó por dimensión 
+
+El análisis presentado a continuación se realizó utilizando RStudio (IRE de R-Cran) y RMarkdown para la generación del informe cuantitativo. 
+
+# Resultados
+
+## Análisis factorial confimatorio
+
+```{r CFA1, echo=FALSE}
+# https://shiny.rit.albany.edu/stat/cfa1test/cfabase.pdf
+# Pendiente a evaluar que análisis este ok
+
+
+```
+
+
+## Variables sociodemográficas
+
+En primera medida, en el gráfico 1 se presenta una descripción de la muestra de empresas entregada por la contraparte. Así, se puede observar que la mayoría de los trabajadores de la base corresponden a la empresa 4, representando un 40% de la muestra (800 en total). Luego, las empresas 1, 2 y 3 correspondieron a un 20% respectivamente (200 trabajadores de cada empresa). 
+
+
+```{r distribución de empresas, echo=FALSE, fig.width=4,fig.height=4}
+
+# Necesito Analizar: (Conversar con equipo)
+# 1) Distribución muestral de las empresas (histograma)
+# 2) Distribución total: edad, antiguedad, sexo,  nivel educativo, terreno y posición jerárquica 
+# 3) ¿Distribución por empresa: mismas variables?
+
+p1_aux <- df %>% 
+  count(empresa) %>% 
+  mutate(pct = n/ sum(n), 
+         pctlabel = paste0(round(pct*100), "%"))
+
+
+p1 <- ggplot(p1_aux, aes(x = empresa, 
+               y = pct)) + 
+  geom_bar(stat = "identity",
+           fill = "cornflowerblue", 
+           color = "black") +
+  geom_text(aes(label = pctlabel), 
+            vjust = -0.25) + 
+  labs(y = "Porcentaje", 
+       x = "Empresa") + 
+  scale_y_continuous(labels = percent)
+
+annotate_figure(p1, top = text_grob("Gráfico 1. Distribución de empresas de la muestra", 
+                   color = "black", face = "bold", size = 11))
+
+```
+
+Luego, el gráfico 2 presenta un resumen de las variables sociodemográficas edad, sexo y nivel educativo. Como se observa, 
+
+```{r variables sociodemográficas, echo=FALSE, fig.width=10,fig.height=10}
+
+#bases de gráficos
+p2_aux1 <- df %>% 
+  count(nivel_educativo) %>% 
+  mutate(pct = n/ sum(n), 
+         pctlabel = paste0(round(pct*100, digits = 1), "%"))
+
+p2_aux2 <- df %>% 
+  count(edad) %>% 
+  mutate(pct = n/ sum(n), 
+         pctlabel = paste0(round(pct*100, digits = 1), "%"))
+
+p2_aux3 <- df %>%
+  count(sexo) %>%
+  arrange(desc(sexo)) %>%
+  mutate(prop = round(n*100/sum(n), digits = 1),
+         lab.ypos = cumsum(prop) - 0.5*prop)
+
+p2_aux3$label <- paste0(p2_aux3$sexo, "\n",
+                         round(p2_aux3$prop), "%")
+
+#Grafico
+p2_1 <- ggplot(p2_aux1, aes(x = nivel_educativo, 
+               y = pct)) + 
+  geom_bar(stat = "identity",
+           fill = "cornflowerblue", 
+           color = "black") +
+  geom_text(aes(label = pctlabel), 
+            vjust = -0.25) + 
+  labs(y = "Porcentaje", 
+       x = "Nivel Educativo") + 
+  scale_y_continuous(labels = percent)
+
+p2_2 <- ggplot(p2_aux2, aes(x = edad, 
+               y = pct)) + 
+  geom_bar(stat = "identity",
+           fill = "salmon", 
+           color = "black") +
+  geom_text(aes(label = pctlabel), 
+            vjust = -0.25) + 
+  labs(y = "Porcentaje", 
+       x = "Edad")  +
+  scale_y_continuous(labels = percent) 
+
+p2_3 <- ggplot(p2_aux3, 
+               aes(x = "", 
+           y = prop, 
+           fill = sexo)) +
+  geom_bar(width = 1, 
+           stat = "identity", 
+           color = "black") +
+  geom_text(aes(y = lab.ypos, label = label), 
+            color = "black") +
+  coord_polar("y", 
+              start = 0, 
+              direction = -1) +
+  theme_void() +
+  theme(legend.position = "FALSE") +
+  labs(title = "Sexo")  
+
+p2 <- ggarrange(p2_1, p2_3, p2_2, 
+          ncol = 2, nrow = 2)  
+  
+annotate_figure(p2, top = text_grob("Gráfico 2. Distribución de Nivel Educativo, Sexo y Edad", 
+                   color = "black", face = "bold", size = 15))
+
+```
+
+
+```{r variables de trabajo, echo=FALSE, fig.width=10, fig.height=10}
+
+#bases de gráficos
+p3_aux1 <- df %>% 
+  count(antiguedad) %>% 
+  mutate(pct = n/ sum(n), 
+         pctlabel = paste0(round(pct*100, digits = 1), "%"))
+
+p3_aux2 <- df %>% 
+  count(posjer_cod) %>% 
+  mutate(pct = n/ sum(n), 
+         pctlabel = paste0(round(pct*100, digits = 1), "%"))
+
+p3_aux3 <- df %>%
+  count(Terreno) %>%
+  arrange(desc(Terreno)) %>%
+  mutate(prop = round(n*100/sum(n), digits = 1),
+         lab.ypos = cumsum(prop) - 0.5*prop)
+
+p3_aux3$label <- paste0(p3_aux3$Terreno, "\n",
+                         round(p3_aux3$prop), "%")
+
+#Grafico
+p3_1 <- ggplot(p3_aux1, aes(x = antiguedad, 
+               y = pct)) + 
+  geom_bar(stat = "identity",
+           fill = "cornflowerblue", 
+           color = "black") +
+  geom_text(aes(label = pctlabel), 
+            vjust = -0.25) + 
+  labs(y = "Porcentaje", 
+       x = "Antigüedad (en años)") + 
+  scale_y_continuous(labels = percent)
+
+p3_2 <- ggplot(p3_aux2, aes(x = posjer_cod, 
+               y = pct)) + 
+  geom_bar(stat = "identity",
+           fill = "salmon", 
+           color = "black") +
+  geom_text(aes(label = pctlabel), 
+            vjust = -0.25) + 
+  labs(y = "Posición jerárquica", 
+       x = "Porcentaje")  +
+  scale_y_continuous(labels = percent) +
+  coord_flip()
+
+p3_3 <- ggplot(p3_aux3, 
+               aes(x = "", 
+           y = prop, 
+           fill = Terreno)) +
+  geom_bar(width = 1, 
+           stat = "identity", 
+           color = "black") +
+  geom_text(aes(y = lab.ypos, label = label), 
+            color = "black") +
+  coord_polar("y", 
+              start = 0, 
+              direction = -1) +
+  theme_void() +
+  theme(legend.position = "FALSE") +
+  labs(title = "Terreno")  
+
+p3 <- ggarrange(p3_1, p3_3, p3_2, 
+          ncol = 2, nrow = 2, 
+          font.label=list(color="black", face = "bold", size=9))  
+  
+annotate_figure(p3, top = text_grob("Gráfico 3. Antigüedad, Terreno y Posición Jerárquica", 
+                   color = "black", face = "bold", size = 15))
+
+
+
+```
+
+Esta es una segunda opción, acá les presento gráficos de a pares con sus tablas respectivas
+
+```{r grafico-tabla, echo=FALSE, fig.width=10, fig.height=8}
+#usaré p2_1 y p2_3
+
+#genero las tablas
+#bar chart
+table_p2_1 <- p2_aux1 %>% 
+  select(nivel_educativo, n, pctlabel) %>%
+  rename(N = n, 
+         Porcentaje = pctlabel, 
+         'Nivel educativo' = nivel_educativo)
+
+#pie chart
+table_p2_3 <- p2_aux3 %>% 
+  select(sexo, n, prop) %>%
+  mutate(prop = paste0(p2_aux3$prop, "%")) %>% 
+  rename(N = n, 
+         Porcentaje = prop, 
+         Sexo = sexo)
+
+p_table_p2_1 <- ggtexttable(table_p2_1, rows = NULL)
+
+p_table_p2_3 <- ggtexttable(table_p2_3, rows = NULL)
+
+p2_t1 <- ggarrange(p2_1, p_table_p2_1, 
+                   ncol = 1, nrow = 2)
+p2_t2 <- ggarrange(p2_3, p_table_p2_3, 
+                   ncol = 1, nrow = 2)
+p2_t <- ggarrange(p2_t1, p2_t2, ncol = 2, nrow = 1)
+
+annotate_figure(p2_t, top = text_grob("Gráfico XX. Nivel educativo y sexo", 
+                   color = "black", face = "bold", size = 15))
+
+```
+
+
+
+
+## Adherencia a la seguridad reglada
+Por adherencia XXX entemos esto xxxx.
+
+
+```{r grafico xx de algo}
+
+```
+
+
+## Retorno de la experiencia
+
+```{r}
+
+```
+
+
+## Información y conocimiento
+
+```{r}
+
+```
+
+
+## Vigilancia compartida
+
+```{r}
+
+```
+
+
+## Reconocimiento
+
+```{r}
+
+```
+
+
+## Sanción
+
+```{r}
+
+```
+
+
+
